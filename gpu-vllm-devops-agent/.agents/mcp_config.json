@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "vllm-devops-agent": {
+    "gpu-devops-agent": {
       "command": "python3",
       "args": [
         "/home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py"

@@ -52,26 +52,41 @@ make run
 
 The following tools are available via the MCP server:
 
-### Infrastructure Management
-*   **`deploy_vllm`**: Deploys a new vLLM instance on Cloud Run GPU.
+### 🐳 Infrastructure & Deployment
+*   **`deploy_vllm`**: Deploys vLLM to Cloud Run GPU (NVIDIA L4 in us-east4).
 *   **`destroy_vllm`**: Deletes the Cloud Run vLLM service.
-*   **`status_vllm`**: Checks the health and status of the vLLM service.
-*   **`get_vllm_endpoint`**: Returns the current active vLLM endpoint URL (discovers it if needed).
-*   **`update_vllm_scaling`**: Adjusts the minimum and maximum instances for scaling.
-*   **`get_vllm_deployment_config`**: Generates `gcloud` commands for deployment.
-*   **`get_vllm_tpu_deployment_config`**: Generates GKE manifests for TPU v5e.
+*   **`status_vllm`**: Checks the status of the Cloud Run vLLM service.
+*   **`update_vllm_scaling`**: Updates min/max instances for scaling.
+*   **`get_vllm_deployment_config`**: Generates the `gcloud` deployment command.
+*   **`get_vllm_gpu_deployment_config`**: Generates a GKE manifest for GPU (NVIDIA L4).
+*   **`check_gpu_quotas`**: Checks L4 and other GPU quotas for a region.
+*   **`get_vllm_endpoint`**: Returns the current active vLLM endpoint URL.
 
-### Model Management
+### 📦 Model Management
 *   **`list_vertex_models`**: Lists models in the Vertex AI Registry.
-*   **`list_bucket_models`**: Lists model artifacts in your GCS bucket.
-*   **`get_vertex_ai_model_copy_instructions`**: Guide to transfer Gemma models from Vertex AI.
-*   **`get_huggingface_model_copy_instructions`**: Guide to transfer Gemma models from Hugging Face.
-*   **`get_huggingfacehub_download_path`**: Downloads and returns the local cache path for a Hugging Face model.
+*   **`list_bucket_models`**: Lists model weights in GCS bucket.
+*   **`save_hf_token`**: Securely saves a Hugging Face API token to Secret Manager.
+*   **`get_vertex_ai_model_copy_instructions`**: Guide to transfer Gemma models from Vertex AI Model Garden to GCS.
+*   **`get_huggingface_model_copy_instructions`**: Guide to transfer Gemma models from Hugging Face and upload to GCS.
+*   **`get_huggingfacehub_download_path`**: Resolves local cache path using huggingface_hub.
 
-### AI & Operations
-*   **`analyze_cloud_logging`**: Summarizes error logs using self-hosted vLLM.
-*   **`suggest_sre_remediation`**: Provides 3-step plans for SRE incidents.
-*   **`query_vllm`**: Sends direct prompts to the self-hosted Gemma model.
+### 📊 Monitoring & Status
+*   **`get_system_status`**: Provides a high-level status dashboard of the Cloud Run service and health.
+*   **`get_endpoint`**: Verifies connectivity and returns the active service URL.
+*   **`get_model_details`**: Retrieves detailed model metadata and engine state from `/v1/models`.
+*   **`verify_model_health`**: Deep health check by querying the model with a simple prompt and measuring latency.
+
+### 📈 Performance & Benchmarking
+*   **`run_benchmark`**: Runs performance/concurrency benchmark sweeps against the Cloud Run vLLM GPU endpoint.
+
+### 💬 Interaction & Diagnostics
+*   **`query_gemma4`**: Primary tool to query the self-hosted model with standard chat message format.
+*   **`query_gemma4_with_stats`**: Queries the model and returns streaming performance statistics (TTFT, throughput).
+*   **`query_vllm`**: Direct text completions querying tool.
+*   **`analyze_cloud_logging`**: Fetches logs from GCP Logging and analyzes them using the model.
+*   **`analyze_gpu_logs`**: Fetches Cloud Run logs and uses Gemma 4 to analyze them for SRE/DevOps errors.
+*   **`suggest_sre_remediation`**: Suggests remediation plans for SRE errors using the model.
+*   **`get_help`**: Provides help text and summarizes the configuration options and all available SRE/DevOps tools.
 
 ## 📦 Resources
 The server exposes the following MCP resources:

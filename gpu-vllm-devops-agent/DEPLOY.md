@@ -1,9 +1,10 @@
-# Deployment Guide: Self-Hosted vLLM on Cloud Run (Gemma 2b-it)
+# Deployment Guide: Self-Hosted vLLM on Cloud Run (Gemma 4 4B-it)
 
 This document summarizes the deployment state and configuration for the vLLM inference server used by the DevOps Agent.
 
 ## 📦 Model Artifacts
-The model was extracted from `gemma-transformers-2b-it-v3.tar.gz` and uploaded to Google Cloud Storage.
+The model was extracted from `gemma-4-E4B-it.tar.gz` and uploaded to Google Cloud Storage.
+
 
 *   **Bucket:** `gs://aisprint-491218-bucket/`
 *   **Path:** `gemma-4-E4B-it/`

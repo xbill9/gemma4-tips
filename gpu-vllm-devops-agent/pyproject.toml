@@ -11,11 +11,12 @@ python_version = "3.10"
 ignore_missing_imports = true
 check_untyped_defs = true
 disable_error_code = ["attr-defined"]
+explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = "google.cloud.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "kagglehub.*"
+module = "huggingface_hub.*"
 ignore_missing_imports = true

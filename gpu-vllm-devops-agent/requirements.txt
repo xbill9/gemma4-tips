@@ -11,4 +11,7 @@ google-cloud-storage
 ruff
 mypy
 types-requests
+openai
+httpx
+
 

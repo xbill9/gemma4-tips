@@ -13,7 +13,7 @@ from server import (
 
 
 async def devops_demo():
-    print("🚀 TPU Sprint Demo: Self-Hosted vLLM DevOps Agent")
+    print("🚀 GPU Sprint Demo: Self-Hosted vLLM DevOps Agent")
     print("=" * 60)
 
     # Step 1: Log Analysis

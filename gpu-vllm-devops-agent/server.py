@@ -1,15 +1,19 @@
 import asyncio
+import csv
 import json
 import logging
 import os
+import statistics
 import subprocess
 import sys
+import time
 from typing import Optional
 
-import requests
+import httpx
 from google.cloud import aiplatform, secretmanager, storage
 from google.cloud import logging as cloud_logging
 from mcp.server.fastmcp import FastMCP
+from openai import AsyncOpenAI
 
 # Setup logging to stderr ONLY to avoid interfering with MCP stdio communication
 logging.basicConfig(
@@ -149,6 +153,35 @@ def get_auth_token() -> str:
         return ""
 
 
+async def get_vllm_client() -> AsyncOpenAI:
+    """Initializes and returns an AsyncOpenAI client for the Cloud Run vLLM service."""
+    vllm_url = get_vllm_url()
+    token = get_auth_token()
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return AsyncOpenAI(
+        base_url=f"{vllm_url}/v1",
+        api_key=token or "not-needed",
+        default_headers=headers,
+    )
+
+
+async def get_active_model_name(client: AsyncOpenAI) -> str:
+    """Queries the vLLM endpoint to find the active model name, or falls back to configuration."""
+    try:
+        models_response = await client.models.list()
+        if models_response.data:
+            return models_response.data[0].id
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to dynamically query active model from vLLM: {e}")
+
+    # Fallback
+    if "/" not in MODEL_NAME:
+        return f"/mnt/models/{MODEL_NAME}"
+    return MODEL_NAME
+
+
 # Initialize Vertex AI SDK
 aiplatform.init(project=PROJECT_ID, location=LOCATION)
 
@@ -167,8 +200,8 @@ image: vllm/vllm-openai:latest
 resources:
   limits:
     nvidia.com/gpu: 1
-    cpu: 4
-    memory: 16Gi
+    cpu: 8
+    memory: 32Gi
 annotations:
   run.googleapis.com/execution-environment: gen2
   run.googleapis.com/gpu-zonal-redundancy-disabled: "true"
@@ -189,7 +222,7 @@ startupProbe:
 # For gcloud deployment, use:
 # gcloud run deploy vllm-gemma-4-e4b-it --no-cpu-throttling --allow-unauthenticated --concurrency=4 \\
 #   --timeout=3600 --startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=10,initialDelaySeconds=180,httpGet.port=8000,httpGet.path=/health \\
-#   --max-instances=1 --args=--model=/mnt/models/gemma-4-E4B-it,--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization=0.9,--host=0.0.0.0
+#   --max-instances=1 --args=--model=/mnt/models/gemma-4-E4B-it,--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000
 volumes:
   - name: model-volume
     cloudStorage:
@@ -289,27 +322,16 @@ async def analyze_cloud_logging(filter_query: str, limit: int = 5) -> str:
         # Prepare prompt for Gemma
         prompt = f"Analyze the following DevOps logs and provide a high-level summary of the critical issues and potential root causes:\n\n{combined_logs}\n\nSummary:"
 
-        # Query Self-Hosted vLLM (OpenAI compatible API)
-        token = get_auth_token()
-        headers = {"Content-Type": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        vllm_url = get_vllm_url()
-        response = requests.post(
-            f"{vllm_url}/v1/completions",
-            headers=headers,
-            json={
-                "model": f"/mnt/models/{MODEL_NAME.split('/')[-1]}",  # Match the path in Cloud Run
-                "prompt": prompt,
-                "max_tokens": 512,
-                "temperature": 0.2,
-            },
+        client = await get_vllm_client()
+        model_name = await get_active_model_name(client)
+        chat_completion = await client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=model_name,
+            max_tokens=512,
+            temperature=0.2,
         )
-        response.raise_for_status()
-        result = response.json()
-
-        return f"### Log Analysis (Self-Hosted vLLM)\n\n{result['choices'][0]['text']}"
+        response_text = chat_completion.choices[0].message.content or ""
+        return f"### Log Analysis (Self-Hosted vLLM)\n\n{response_text}"
 
     except Exception as e:
         return f"Error analyzing logs via self-hosted vLLM: {str(e)}"
@@ -326,25 +348,16 @@ async def suggest_sre_remediation(error_message: str) -> str:
     prompt = f"As an expert SRE, suggest a 3-step remediation plan for the following error:\n\nError: {error_message}\n\nRemediation Plan:"
 
     try:
-        token = get_auth_token()
-        headers = {"Content-Type": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        vllm_url = get_vllm_url()
-        response = requests.post(
-            f"{vllm_url}/v1/completions",
-            headers=headers,
-            json={
-                "model": f"/mnt/models/{MODEL_NAME.split('/')[-1]}",
-                "prompt": prompt,
-                "max_tokens": 512,
-                "temperature": 0.2,
-            },
+        client = await get_vllm_client()
+        model_name = await get_active_model_name(client)
+        chat_completion = await client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=model_name,
+            max_tokens=512,
+            temperature=0.2,
         )
-        response.raise_for_status()
-        result = response.json()
-        return f"### Remediation Plan\n\n{result['choices'][0]['text']}"
+        response_text = chat_completion.choices[0].message.content or ""
+        return f"### Remediation Plan\n\n{response_text}"
     except Exception as e:
         return f"Error fetching remediation plan: {str(e)}"
 
@@ -360,25 +373,16 @@ async def query_vllm(prompt: str, max_tokens: int = 512, temperature: float = 0.
         temperature: Sampling temperature (0.0 for deterministic).
     """
     try:
-        token = get_auth_token()
-        headers = {"Content-Type": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        vllm_url = get_vllm_url()
-        response = requests.post(
-            f"{vllm_url}/v1/completions",
-            headers=headers,
-            json={
-                "model": f"/mnt/models/{MODEL_NAME.split('/')[-1]}",
-                "prompt": prompt,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            },
+        client = await get_vllm_client()
+        model_name = await get_active_model_name(client)
+        chat_completion = await client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=model_name,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
-        response.raise_for_status()
-        result = response.json()
-        return f"### vLLM Response\n\n{result['choices'][0]['text']}"
+        response_text = chat_completion.choices[0].message.content or ""
+        return f"### vLLM Response\n\n{response_text}"
     except Exception as e:
         return f"Error querying vLLM: {str(e)}"
 
@@ -390,7 +394,7 @@ def get_vllm_deployment_config(
     model_path: str = "gemma-4-E4B-it",
     allow_unauthenticated: bool = False,
     min_instances: int = 0,
-    gpu_memory_utilization: float = 0.9,
+    gpu_memory_utilization: float = 0.95,
 ) -> str:
     """
     Generates the gcloud command to deploy vLLM to Cloud Run with GCS FUSE and NVIDIA L4 GPU.
@@ -401,7 +405,7 @@ def get_vllm_deployment_config(
         model_path: The sub-path inside the bucket (e.g., 'gemma-4-E4B-it') or Hugging Face repo ID.
         allow_unauthenticated: Whether to allow unauthenticated access to the service.
         min_instances: The minimum number of instances to keep warm (default: 0).
-        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.9).
+        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.95).
     """
     # Check if we are pulling directly from Hugging Face
     is_hf = "/" in model_path and not model_path.startswith("/")
@@ -410,6 +414,7 @@ def get_vllm_deployment_config(
         "gcloud beta run deploy",
         service_name,
         "--image=vllm/vllm-openai:latest",
+        "--command=python3,-m,vllm.entrypoints.openai.api_server",
         "--gpu=1",
         "--gpu-type=nvidia-l4",
         "--no-gpu-zonal-redundancy",  # Fix for quota issues in us-east4
@@ -420,21 +425,24 @@ def get_vllm_deployment_config(
         "--max-instances=1",  # Prevent scaling beyond quota
         f"--min-instances={min_instances}",
         "--port=8000",  # vLLM default port
-        "--memory=16Gi",
-        "--cpu=4",
+        "--memory=32Gi",
+        "--cpu=8",
         "--execution-environment=gen2",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
     ]
 
     if is_hf:
         command.append("--set-secrets=HF_TOKEN=hf-token:latest")
         command.append(
-            f"--args=--model={model_path},--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization={gpu_memory_utilization},--host=0.0.0.0"
+            f"--args=--model={model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
     else:
-        command.append(f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true")
+        command.append(
+            f'--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options="uid=1001;gid=1001"'
+        )
         command.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         command.append(
-            f"--args=--model=/mnt/models/{model_path},--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization={gpu_memory_utilization},--host=0.0.0.0"
+            f"--args=--model=/mnt/models/{model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
 
     command.append("--allow-unauthenticated" if allow_unauthenticated else "--no-allow-unauthenticated")
@@ -467,6 +475,7 @@ async def deploy_vllm(
         service_name,
         f"--project={PROJECT_ID}",
         "--image=vllm/vllm-openai:latest",
+        "--command=python3,-m,vllm.entrypoints.openai.api_server",
         "--gpu=1",
         "--gpu-type=nvidia-l4",
         "--no-gpu-zonal-redundancy",
@@ -477,23 +486,26 @@ async def deploy_vllm(
         "--max-instances=1",
         "--min-instances=0",
         "--port=8000",
-        "--memory=16Gi",
-        "--cpu=4",
+        "--memory=32Gi",
+        "--cpu=8",
         "--execution-environment=gen2",
         "--no-allow-unauthenticated",
         f"--region={LOCATION}",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
     ]
 
     if is_hf:
         cmd.append("--set-secrets=HF_TOKEN=hf-token:latest")
         cmd.append(
-            f"--args=--model={model_path},--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization=0.9,--host=0.0.0.0"
+            f"--args=--model={model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
     else:
-        cmd.append(f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true")
+        cmd.append(
+            f'--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options="uid=1001;gid=1001"'
+        )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         cmd.append(
-            f"--args=--model=/mnt/models/{model_path},--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization=0.9,--host=0.0.0.0"
+            f"--args=--model=/mnt/models/{model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
 
     try:
@@ -586,64 +598,60 @@ def update_vllm_scaling(min_instances: int, max_instances: int, service_name: st
 
 
 @mcp.tool()
-def get_vllm_tpu_deployment_config(cluster_name: str = "tpu-cluster", model_name: str = "google/gemma-2-9b-it") -> str:
+def get_vllm_gpu_deployment_config(cluster_name: str = "gpu-cluster", model_name: str = "google/gemma-2-9b-it") -> str:
     """
-    Generates a GKE manifest and setup instructions for deploying vLLM on TPU v5e.
+    Generates a GKE manifest and setup instructions for deploying vLLM on GPU (NVIDIA L4).
 
     Args:
         cluster_name: The name of the GKE cluster.
         model_name: The model identifier (e.g., 'google/gemma-2-9b-it').
     """
     manifest = f"""
-### 🌀 vLLM on TPU v5e (GKE Deployment)
+### 🌀 vLLM on GPU (GKE Deployment)
 
-To deploy vLLM on TPUs, use the following GKE manifest. This configuration targets a **TPU v5e-8** (8 chips) which is ideal for Gemma 2 9B or 27B.
+To deploy vLLM on GPUs, use the following GKE manifest. This configuration targets a single **NVIDIA L4 GPU** which is ideal for Gemma 2 9B.
 
-#### 1. Create a TPU Node Pool (if not exists)
+#### 1. Create a GPU Node Pool (if not exists)
 ```bash
-gcloud container node-pools create tpu-v5e-8 \\
+gcloud container node-pools create gpu-l4 \\
     --cluster={cluster_name} \\
     --location={LOCATION} \\
-    --machine-type=ct5lp-hightpu-4t \\
-    --tpu-topology=2x4 \\
+    --machine-type=g2-standard-4 \\
+    --accelerator=type=nvidia-l4,count=1 \\
     --num-nodes=1
 ```
 
-#### 2. Kubernetes Manifest (vllm-tpu.yaml)
+#### 2. Kubernetes Manifest (vllm-gpu.yaml)
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-tpu
+  name: vllm-gpu
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: vllm-tpu
+      app: vllm-gpu
   template:
     metadata:
       labels:
-        app: vllm-tpu
+        app: vllm-gpu
     spec:
       nodeSelector:
-        cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice
-        cloud.google.com/gke-tpu-topology: 2x4
+        cloud.google.com/gke-gpu: "true"
       containers:
-      - name: vllm-tpu
-        image: vllm/vllm-tpu:latest
+      - name: vllm-gpu
+        image: vllm/vllm-openai:latest
         resources:
           limits:
-            google.com/tpu: "8"
+            nvidia.com/gpu: "1"
           requests:
-            google.com/tpu: "8"
-        env:
-        - name: VLLM_XLA_CACHE_PATH
-          value: "/tmp/vllm_xla_cache"
+            nvidia.com/gpu: "1"
         command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
         args:
         - "--model={model_name}"
-        - "--tensor-parallel-size=8"
-        - "--max-model-len=8192"
+        - "--gpu-memory-utilization=0.9"
+        - "--max-model-len=4096"
         ports:
         - containerPort: 8000
         volumeMounts:
@@ -657,10 +665,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-tpu-service
+  name: vllm-gpu-service
 spec:
   selector:
-    app: vllm-tpu
+    app: vllm-gpu
   ports:
   - protocol: TCP
     port: 80
@@ -669,8 +677,8 @@ spec:
 ```
 
 #### 3. Deployment Steps
-1. Save the YAML above to `vllm-tpu.yaml`.
-2. Apply it: `kubectl apply -f vllm-tpu.yaml`.
+1. Save the YAML above to `vllm-gpu.yaml`.
+2. Apply it: `kubectl apply -f vllm-gpu.yaml`.
 3. (Optional) If using a private model, ensure a Hugging Face token is provided via secret.
 """
     return manifest
@@ -805,6 +813,463 @@ def check_gpu_quotas(region: str = LOCATION) -> str:
         return f"Failed to retrieve GPU quotas for region `{region}`:\nError: {e.stderr}\nOutput: {e.stdout}"
     except Exception as e:
         return f"Error checking GPU quotas: {str(e)}"
+
+
+@mcp.tool()
+async def verify_model_health() -> str:
+    """Runs a deep health check with latency reporting on the Cloud Run GPU-hosted model."""
+    try:
+        client = await get_vllm_client()
+        model_name = await get_active_model_name(client)
+        start_time = time.monotonic()
+        chat_completion = await client.chat.completions.create(
+            messages=[{"role": "user", "content": "Hello, is the model working?"}],
+            model=model_name,
+            max_tokens=200,
+        )
+        end_time = time.monotonic()
+        latency = end_time - start_time
+        response_content = chat_completion.choices[0].message.content
+
+        if response_content:
+            return (
+                f"✅ Model health check PASSED.\n"
+                f"Model: {model_name}\n"
+                f"Response: '{response_content[:50]}...'\n"
+                f"Latency: {latency:.2f} seconds."
+            )
+        else:
+            return "❌ Model health check FAILED: Empty response."
+    except Exception as e:
+        return f"❌ Model health check FAILED: {e}"
+
+
+@mcp.tool()
+async def query_gemma4(prompt: str) -> str:
+    """Queries the self-hosted Gemma 4 model on Cloud Run."""
+    logger.info(f"Querying Cloud Run model with prompt: '{prompt[:50]}...'")
+    try:
+        client = await get_vllm_client()
+        model_name = await get_active_model_name(client)
+        chat_completion = await client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=model_name,
+        )
+        response = chat_completion.choices[0].message.content or "No response from model."
+        logger.info(f"Model response: '{response[:100]}...'")
+        return response
+    except Exception as e:
+        logger.error(f"Error querying model: {e}")
+        return f"❌ An error occurred while querying the model: {e}"
+
+
+@mcp.tool()
+async def query_gemma4_with_stats(prompt: str) -> str:
+    """
+    Queries the self-hosted Gemma 4 model on Cloud Run and returns detailed performance statistics.
+
+    This tool provides:
+    - The full model response.
+    - Time to First Token (TTFT).
+    - Total generation time.
+    - Tokens per second.
+    """
+    logger.info(f"Querying model with stats with prompt: '{prompt[:50]}...'")
+    try:
+        client = await get_vllm_client()
+        model_name = await get_active_model_name(client)
+
+        start_time = time.monotonic()
+        ttft = None
+        response_content = ""
+        total_tokens = 0
+
+        stream = await client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=model_name,
+            stream=True,
+        )
+
+        async for chunk in stream:
+            if ttft is None:
+                ttft = time.monotonic() - start_time
+
+            if chunk.choices and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                response_content += content
+                total_tokens += 1  # Rough token count
+
+        end_time = time.monotonic()
+        total_time = end_time - start_time
+
+        if not response_content:
+            return "❌ Model returned an empty response."
+
+        tokens_per_second = total_tokens / (total_time - ttft) if ttft and total_time > ttft else 0
+
+        stats_report = (
+            f"### 📊 Performance Stats\n"
+            f"- **Model:** `{model_name}`\n"
+            f"- **Time to First Token (TTFT):** `{ttft:.3f}s`\n"
+            f"- **Total Generation Time:** `{total_time:.3f}s`\n"
+            f"- **Tokens per Second:** `{tokens_per_second:.2f} tokens/s`\n"
+            f"- **Total Tokens (approx.):** `{total_tokens}`\n"
+            f"\n### 💬 Model Response\n"
+            f"{response_content}"
+        )
+
+        logger.info(f"Model response with stats: TTFT={ttft:.3f}s, TotalTime={total_time:.3f}s")
+        return stats_report
+
+    except Exception as e:
+        logger.error(f"Error querying model with stats: {e}")
+        return f"❌ An error occurred while querying the model with stats: {e}"
+
+
+@mcp.tool()
+async def get_model_details() -> str:
+    """Retrieves detailed information about the running Cloud Run model, engine, and versions."""
+    report = ""
+    try:
+        vllm_url = get_vllm_url()
+        report += f"### 🧩 Model Details ({vllm_url})\n\n"
+        client = await get_vllm_client()
+
+        # 1. Get Model Details from /v1/models
+        try:
+            models_res = await client.models.list()
+            report += "**Model Information (`/v1/models`):**\n"
+            models_list = [{"id": m.id, "object": m.object, "owned_by": m.owned_by} for m in models_res.data]
+            report += f"```json\n{json.dumps(models_list, indent=2)}\n```\n"
+        except Exception as e:
+            report += f"❌ Error fetching model details via client: {e}\n\n"
+
+        # 2. Get Health Status
+        token = get_auth_token()
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        async with httpx.AsyncClient(timeout=10) as http_client:
+            try:
+                res = await http_client.get(f"{vllm_url}/health", headers=headers)
+                if res.status_code == 200:
+                    report += "**Health Status (`/health`):**\n- Status: `Healthy` ✅\n\n"
+                else:
+                    report += f"**Health Status (`/health`):**\n- Status: `Unhealthy` (Code: {res.status_code}) ❌\n\n"
+            except Exception as e:
+                report += f"**Health Status (`/health`):**\n- Status: `Unreachable` (Error: {e}) ❌\n\n"
+    except Exception as e:
+        report += f"❌ Error retrieving system URL or auth token: {e}"
+
+    return report
+
+
+@mcp.tool()
+async def get_system_status(service_name: str = "vllm-gemma-4-e4b-it") -> str:
+    """
+    Provides a high-level dashboard of Cloud Run system status.
+
+    Args:
+        service_name: The name of the Cloud Run service to status.
+    """
+    health = "🔴 Offline"
+    url = None
+    try:
+        url = get_vllm_url()
+        token = get_auth_token()
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        async with httpx.AsyncClient(timeout=5) as client:
+            res = await client.get(f"{url}/health", headers=headers)
+            if res.status_code == 200:
+                health = f"🟢 Online ({url})"
+            else:
+                health = f"🔴 Offline (Status {res.status_code}) ({url})"
+    except Exception as e:
+        logger.warning(f"Health check failed: {e}")
+
+    cloud_run_status = "🔴 Unknown"
+    try:
+        cmd = [
+            "gcloud",
+            "run",
+            "services",
+            "describe",
+            service_name,
+            f"--project={PROJECT_ID}",
+            f"--region={LOCATION}",
+            "--format=json",
+        ]
+        process = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if process.returncode == 0:
+            import json
+
+            data = json.loads(process.stdout)
+            conditions = data.get("status", {}).get("conditions", [])
+            ready_cond = next((c for c in conditions if c.get("type") == "Ready"), None)
+            if ready_cond and ready_cond.get("status") == "True":
+                cloud_run_status = "🟢 Ready"
+            elif ready_cond:
+                cloud_run_status = f"🔴 Not Ready ({ready_cond.get('status')})"
+            else:
+                cloud_run_status = "🔴 Not Ready (No Ready condition)"
+        else:
+            cloud_run_status = f"🔴 Error checking service ({process.stderr.strip()})"
+    except Exception as e:
+        cloud_run_status = f"🔴 Error: {str(e)}"
+
+    if "🟢" in health:
+        next_step = "Use `query_gemma4` to interact with the model."
+    else:
+        next_step = f"Call `deploy_vllm` to provision or start the Cloud Run service `{service_name}`."
+
+    return (
+        f"### 🌀 GPU Cloud Run System Status\n"
+        f"- **vLLM Health:** {health}\n"
+        f"- **Cloud Run Service Status:** {cloud_run_status}\n"
+        f"**👉 Next Step:** {next_step}"
+    )
+
+
+@mcp.tool()
+async def get_endpoint(service_name: str = "vllm-gemma-4-e4b-it") -> str:
+    """
+    Returns the active Cloud Run vLLM service URL if available.
+
+    Args:
+        service_name: The name of the Cloud Run service to query.
+    """
+    try:
+        url = get_vllm_url()
+        token = get_auth_token()
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        async with httpx.AsyncClient(timeout=5) as client:
+            res = await client.get(f"{url}/health", headers=headers)
+            if res.status_code == 200:
+                return f"🟢 Cloud Run vLLM is Online at: {url}"
+            else:
+                return f"🔴 Cloud Run vLLM is configured at {url} but returned status {res.status_code}."
+    except Exception as e:
+        return f"🔴 Cloud Run vLLM endpoint check failed: {e}. Try deploying/starting it with `deploy_vllm`."
+
+
+@mcp.tool()
+async def run_benchmark(
+    model: Optional[str] = None,
+    num_prompts: int = 20,
+    random_output_len: int = 128,
+    max_concurrency: int = 8,
+) -> str:
+    """
+    Runs a performance/concurrency benchmark sweep against the Cloud Run vLLM GPU endpoint.
+
+    Args:
+        model: Model name to request (defaults to the active model from /v1/models).
+        num_prompts: Number of requests to send per concurrency level.
+        random_output_len: Max tokens to generate per request.
+        max_concurrency: Maximum concurrency level to sweep up to (powers of 2, e.g. 1, 2, 4, 8).
+    """
+    from datetime import datetime
+
+    try:
+        url = get_vllm_url()
+        token = get_auth_token()
+    except Exception as e:
+        return f"❌ Cannot run benchmark: {e}"
+
+    # Get active model name if not provided
+    client = await get_vllm_client()
+    if not model:
+        model = await get_active_model_name(client)
+
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    base_url = f"{url.rstrip('/')}/v1/completions"
+    prompt = "Explain the importance of Site Reliability Engineering for large scale AI deployments."
+
+    concurrencies = []
+    c = 1
+    while c <= max_concurrency:
+        concurrencies.append(c)
+        c *= 2
+    if max_concurrency not in concurrencies:
+        concurrencies.append(max_concurrency)
+
+    results = []
+
+    async def send_request(http_client: httpx.AsyncClient, sem: asyncio.Semaphore) -> dict:
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "max_tokens": random_output_len,
+            "temperature": 0.0,
+            "stream": False,
+        }
+        async with sem:
+            start_time = time.perf_counter()
+            try:
+                response = await http_client.post(base_url, json=payload, headers=headers, timeout=120)
+                end_time = time.perf_counter()
+                if response.status_code == 200:
+                    latency = end_time - start_time
+                    data = response.json()
+                    tokens = data.get("usage", {}).get("completion_tokens", random_output_len)
+                    return {"success": True, "latency": latency, "tokens": tokens}
+                else:
+                    return {"success": False, "error": f"Status {response.status_code}"}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+    # Warmup
+    logger.info("Warming up model for benchmark...")
+    async with httpx.AsyncClient() as http_client:
+        await send_request(http_client, asyncio.Semaphore(1))
+
+    logger.info(f"Starting GPU benchmark sweep against {url} with model {model}...")
+    for concurrency in concurrencies:
+        logger.info(f"Running sweep with concurrency={concurrency}...")
+        sem = asyncio.Semaphore(concurrency)
+
+        async with httpx.AsyncClient() as http_client:
+            start_batch = time.perf_counter()
+            tasks = [send_request(http_client, sem) for _ in range(num_prompts)]
+            batch_results = await asyncio.gather(*tasks)
+            total_time = time.perf_counter() - start_batch
+
+        successes = [r for r in batch_results if r["success"]]
+        latencies = [r["latency"] for r in successes]
+
+        if not latencies:
+            results.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "concurrency": concurrency,
+                    "total_requests": num_prompts,
+                    "success_rate": 0.0,
+                    "avg_latency": 0.0,
+                    "p95_latency": 0.0,
+                    "req_per_sec": 0.0,
+                    "tokens_per_sec": 0.0,
+                }
+            )
+            continue
+
+        avg_lat = statistics.mean(latencies)
+        p95_lat = sorted(latencies)[int(len(latencies) * 0.95)]
+        throughput = len(successes) / total_time
+        tokens_per_sec = sum(r["tokens"] for r in successes) / total_time
+
+        results.append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "concurrency": concurrency,
+                "total_requests": num_prompts,
+                "success_rate": len(successes) / num_prompts,
+                "avg_latency": avg_lat,
+                "p95_latency": p95_lat,
+                "req_per_sec": throughput,
+                "tokens_per_sec": tokens_per_sec,
+            }
+        )
+
+    # Save to CSV
+    output_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "benchmark_results.csv")
+    with open(output_file, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "timestamp",
+                "concurrency",
+                "total_requests",
+                "success_rate",
+                "avg_latency",
+                "p95_latency",
+                "req_per_sec",
+                "tokens_per_sec",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(results)
+
+    summary_str = f"### 📊 GPU Benchmark Results (Model: `{model}`)\n\n"
+    summary_str += "| Concurrency | Success Rate | Req/s | Tokens/s | Avg Latency | P95 Latency |\n"
+    summary_str += "|---:|---:|---:|---:|---:|---:|\n"
+    for r in results:
+        summary_str += f"| {r['concurrency']} | {r['success_rate']:.1%} | {r['req_per_sec']:.2f} | {r['tokens_per_sec']:.2f} | {r['avg_latency']:.2f}s | {r['p95_latency']:.2f}s |\n"
+    summary_str += f"\n\nResults saved to `{output_file}`"
+    return summary_str
+
+
+@mcp.tool()
+async def analyze_gpu_logs(limit: int = 15, service_name: str = "vllm-gemma-4-e4b-it") -> str:
+    """
+    Fetches Cloud Run logs for the specified service and uses Gemma 4 to analyze them for errors.
+
+    Args:
+        limit: Number of log entries to fetch.
+        service_name: Name of the Cloud Run service.
+    """
+    filter_query = f'resource.type="cloud_run_revision" AND resource.labels.service_name="{service_name}"'
+    return await analyze_cloud_logging(filter_query, limit)
+
+
+@mcp.tool()
+async def get_help() -> str:
+    """Provides help text and summarizes the configuration options and all available SRE/DevOps tools for this Cloud Run MCP server."""
+    return (
+        "### 🛠️ Cloud Run Gemma 4 SRE Agent Help & Configuration\n\n"
+        "You can configure this MCP server using the following environment variables:\n\n"
+        f"- **`GOOGLE_CLOUD_PROJECT`**: Your GCP Project ID.\n"
+        f"  - *Current Value:* `{PROJECT_ID}`\n"
+        f"- **`GOOGLE_CLOUD_LOCATION`**: The GCP Region for deployment.\n"
+        f"  - *Current Value:* `{LOCATION}`\n"
+        f"- **`BUCKET_NAME`**: GCS Bucket used to store model weights.\n"
+        f"  - *Current Value:* `{BUCKET_NAME}`\n"
+        f"- **`MODEL_NAME`**: Default Hugging Face repository or path.\n"
+        f"  - *Current Value:* `{MODEL_NAME}`\n"
+        f"- **`VLLM_BASE_URL`**: The explicit URL of your Cloud Run service. (If not set, it is auto-discovered via `gcloud`)\n"
+        f"  - *Current Value:* `{VLLM_BASE_URL or 'Not set (auto-discovering)'}`\n\n"
+        "### ℹ️ Active Mode Summary\n"
+        "The server is running in **CLOUD RUN** mode targeting NVIDIA L4 GPU in region `us-east4`.\n\n"
+        "---\n\n"
+        "### 🧰 Available MCP Tools\n\n"
+        "Below is a summary of the tools exposed by this SRE/DevOps agent:\n\n"
+        "#### 🐳 Infrastructure & Deployment\n"
+        "- **`deploy_vllm`**: Deploys vLLM to Cloud Run GPU (NVIDIA L4 in us-east4).\n"
+        "- **`destroy_vllm`**: Deletes the Cloud Run vLLM service.\n"
+        "- **`status_vllm`**: Checks the status of the Cloud Run vLLM service.\n"
+        "- **`update_vllm_scaling`**: Updates min/max instances for scaling.\n"
+        "- **`get_vllm_deployment_config`**: Generates the gcloud deployment command.\n"
+        "- **`get_vllm_gpu_deployment_config`**: Generates a GKE manifest for GPU (NVIDIA L4).\n"
+        "- **`check_gpu_quotas`**: Checks L4 and other GPU quotas for a region.\n\n"
+        "#### 📊 Model Management\n"
+        "- **`list_vertex_models`**: Lists models in the Vertex AI Registry.\n"
+        "- **`list_bucket_models`**: Lists model weights in GCS bucket.\n"
+        "- **`save_hf_token`**: Securely saves a Hugging Face API token to Secret Manager.\n"
+        "- **`get_vertex_ai_model_copy_instructions`**: Instructions to copy model from Vertex AI Model Garden to GCS.\n"
+        "- **`get_huggingface_model_copy_instructions`**: Instructions to download model from Hugging Face and upload to GCS.\n"
+        "- **`get_huggingfacehub_download_path`**: Resolves local cache path using huggingface_hub.\n\n"
+        "#### 📊 Monitoring & Status\n"
+        "- **`get_system_status`**: Provides a high-level status dashboard of the Cloud Run service and health.\n"
+        "- **`get_endpoint`**: Verifies connectivity and returns the active service URL.\n"
+        "- **`get_model_details`**: Retrieves detailed model metadata and engine state from `/v1/models`.\n"
+        "- **`verify_model_health`**: Deep health check by querying the model with a simple prompt and measuring latency.\n\n"
+        "#### 📈 Performance & Benchmarking\n"
+        "- **`run_benchmark`**: Runs performance/concurrency benchmark sweeps against the Cloud Run vLLM GPU endpoint.\n\n"
+        "#### 💬 Interaction & Diagnostics\n"
+        "- **`query_gemma4`**: Primary tool to query the self-hosted model with standard chat message format.\n"
+        "- **`query_gemma4_with_stats`**: Queries the model and returns streaming performance statistics (TTFT, throughput).\n"
+        "- **`query_vllm`**: Direct text completions querying tool.\n"
+        "- **`analyze_cloud_logging`**: Fetches logs from GCP Logging and analyzes them using the model.\n"
+        "- **`analyze_gpu_logs`**: Fetches Cloud Run logs and uses Gemma 4 to analyze them for SRE/DevOps errors.\n"
+        "- **`suggest_sre_remediation`**: Suggests remediation plans for SRE errors using the model.\n"
+    )
 
 
 if __name__ == "__main__":

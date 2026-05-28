@@ -40,14 +40,15 @@ deploy-vllm:
 		--max-instances=1 \
 		--min-instances=0 \
 		--port=8000 \
-		--memory=16Gi \
-		--cpu=4 \
+		--memory=32Gi \
+		--cpu=8 \
 		--execution-environment=gen2 \
 		--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true \
 		--add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-		--args=--model=/mnt/models/$(MODEL_PATH),--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization=0.9,--host=0.0.0.0 \
+		--args=--model=/mnt/models/$(MODEL_PATH),--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000 \
 		--no-allow-unauthenticated \
-		--region=$(REGION)
+		--region=$(REGION) \
+		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1
 
 # Deploy the vLLM inference stack
 deploy: deploy-vllm

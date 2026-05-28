@@ -23,6 +23,11 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("status_vllm", tools)
         self.assertIn("update_vllm_scaling", tools)
         self.assertIn("check_gpu_quotas", tools)
+        self.assertIn("verify_model_health", tools)
+        self.assertIn("query_gemma4", tools)
+        self.assertIn("query_gemma4_with_stats", tools)
+        self.assertIn("get_model_details", tools)
+        self.assertIn("get_help", tools)
 
     @patch("server.subprocess.run")
     def test_update_vllm_scaling(self, mock_run):
@@ -81,11 +86,11 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cmd[4], "test-service")
         self.assertIn("--image=vllm/vllm-openai:latest", cmd)
         self.assertIn(
-            "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true",
+            '--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options="uid=1001;gid=1001"',
             cmd,
         )
         self.assertIn(
-            "--args=--model=/mnt/models/test-model,--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization=0.9,--host=0.0.0.0",
+            "--args=--model=/mnt/models/test-model,--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
             cmd,
         )
 
@@ -113,9 +118,12 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         args, kwargs = mock_run.call_args
         cmd = args[0]
         self.assertIn("--set-secrets=HF_TOKEN=hf-token:latest", cmd)
-        self.assertNotIn("--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true", cmd)
+        self.assertNotIn(
+            '--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options="uid=1001;gid=1001"',
+            cmd,
+        )
         self.assertIn(
-            "--args=--model=google/gemma-4-E4B-it,--max-model-len=4096,--trust-remote-code,--gpu-memory-utilization=0.9,--host=0.0.0.0",
+            "--args=--model=google/gemma-4-E4B-it,--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
             cmd,
         )
 
@@ -258,6 +266,161 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cmd[3], "describe")
         self.assertEqual(cmd[4], "us-east4")
         self.assertIn("--format=json(quotas)", cmd)
+
+    async def test_get_help(self):
+        """Test get_help returns correct tool and region information."""
+        from server import get_help
+
+        result = await get_help()
+        self.assertIn("Cloud Run Gemma 4 SRE Agent Help", result)
+        self.assertIn("deploy_vllm", result)
+        self.assertIn("NVIDIA L4", result)
+        self.assertIn("us-east4", result)
+
+    @patch("server.get_vllm_client")
+    @patch("server.get_active_model_name")
+    async def test_verify_model_health(self, mock_model_name, mock_client_factory):
+        """Test verify_model_health parses model response and calculates latency."""
+        from server import verify_model_health
+
+        mock_model_name.return_value = "test-model-name"
+        mock_client = MagicMock()
+        mock_chat = MagicMock()
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+
+        mock_message.content = "Yes, the model is active and running."
+        mock_choice.message = mock_message
+        mock_choice.message.content = "Yes, the model is active and running."
+        mock_completion.choices = [mock_choice]
+
+        # Async mock for client.chat.completions.create
+        async def mock_create(*args, **kwargs):
+            return mock_completion
+
+        mock_chat.create = mock_create
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions = mock_chat
+        mock_client_factory.return_value = mock_client
+
+        result = await verify_model_health()
+        self.assertIn("Model health check PASSED", result)
+        self.assertIn("test-model-name", result)
+        self.assertIn("Yes, the model is active and running.", result)
+
+    @patch("server.get_vllm_client")
+    @patch("server.get_active_model_name")
+    async def test_query_gemma4(self, mock_model_name, mock_client_factory):
+        """Test query_gemma4 queries the model via chat completions."""
+        from server import query_gemma4
+
+        mock_model_name.return_value = "test-model-name"
+        mock_client = MagicMock()
+        mock_chat = MagicMock()
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+
+        mock_message.content = "Response from Gemma"
+        mock_choice.message = mock_message
+        mock_choice.message.content = "Response from Gemma"
+        mock_completion.choices = [mock_choice]
+
+        async def mock_create(*args, **kwargs):
+            return mock_completion
+
+        mock_chat.create = mock_create
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions = mock_chat
+        mock_client_factory.return_value = mock_client
+
+        result = await query_gemma4("Hello")
+        self.assertEqual(result, "Response from Gemma")
+
+    @patch("server.get_vllm_client")
+    @patch("server.get_active_model_name")
+    async def test_query_gemma4_with_stats(self, mock_model_name, mock_client_factory):
+        """Test query_gemma4_with_stats collects performance metrics."""
+        from server import query_gemma4_with_stats
+
+        mock_model_name.return_value = "test-model-name"
+        mock_client = MagicMock()
+        mock_chat = MagicMock()
+
+        # We need mock chunks to simulate streaming
+        class MockChunk:
+            def __init__(self, content):
+                mock_delta = MagicMock()
+                mock_delta.content = content
+                mock_choice = MagicMock()
+                mock_choice.delta = mock_delta
+                self.choices = [mock_choice]
+
+        chunks = [MockChunk("Hello"), MockChunk(" world!")]
+
+        # Async generator mock
+        async def mock_create_stream(*args, **kwargs):
+            async def async_gen():
+                for chunk in chunks:
+                    yield chunk
+
+            return async_gen()
+
+        mock_chat.create = mock_create_stream
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions = mock_chat
+        mock_client_factory.return_value = mock_client
+
+        result = await query_gemma4_with_stats("Hello")
+        self.assertIn("Performance Stats", result)
+        self.assertIn("test-model-name", result)
+        self.assertIn("Hello world!", result)
+
+    @patch("server.get_vllm_client")
+    @patch("server.get_vllm_url")
+    @patch("server.get_auth_token")
+    @patch("server.httpx.AsyncClient")
+    async def test_get_model_details(
+        self, mock_httpx_client_class, mock_auth_token, mock_vllm_url, mock_client_factory
+    ):
+        """Test get_model_details formats models list and health status."""
+        from server import get_model_details
+
+        mock_vllm_url.return_value = "http://test-url"
+        mock_auth_token.return_value = "mock-token"
+
+        # Mock OpenAI client
+        mock_client = MagicMock()
+        mock_models_response = MagicMock()
+        mock_model = MagicMock()
+        mock_model.id = "test-model-id"
+        mock_model.object = "model"
+        mock_model.owned_by = "google"
+        mock_models_response.data = [mock_model]
+
+        async def mock_list():
+            return mock_models_response
+
+        mock_client.models.list = mock_list
+        mock_client_factory.return_value = mock_client
+
+        # Mock HTTPX response
+        mock_httpx_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        async def mock_get(*args, **kwargs):
+            return mock_response
+
+        mock_httpx_client.get = mock_get
+        mock_httpx_client.__aenter__.return_value = mock_httpx_client
+        mock_httpx_client_class.return_value = mock_httpx_client
+
+        result = await get_model_details()
+        self.assertIn("Model Details (http://test-url)", result)
+        self.assertIn("test-model-id", result)
+        self.assertIn("Healthy", result)
 
 
 if __name__ == "__main__":
