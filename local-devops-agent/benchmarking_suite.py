@@ -94,6 +94,9 @@ async def main():
     parser.add_argument("--requests", type=int, default=20, help="Requests per sweep")
     parser.add_argument("--tokens", type=int, default=128, help="Max tokens per request")
     parser.add_argument("--output", type=str, default="benchmark_results.csv")
+    parser.add_argument(
+        "--concurrencies", type=str, default="1,2,4,8,16", help="Comma-separated list of concurrencies to sweep"
+    )
     args = parser.parse_args()
 
     prompt = "Explain the importance of Site Reliability Engineering for large scale AI deployments."
@@ -109,7 +112,12 @@ async def main():
         await suite.send_request(client, prompt, args.tokens)
 
     # Sweep through concurrencies
-    concurrencies = [1, 2, 4, 8, 16]
+    try:
+        concurrencies = [int(c.strip()) for c in args.concurrencies.split(",") if c.strip()]
+    except ValueError:
+        concurrencies = [1, 2, 4, 8, 16]
+        print(f"⚠️ Invalid concurrencies format. Falling back to default: {concurrencies}")
+
     for c in concurrencies:
         await suite.run_batch(c, args.requests, prompt, args.tokens)
 

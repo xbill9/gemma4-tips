@@ -23,13 +23,13 @@ The inference server is deployed locally using Docker.
 ### 1. Launch local container
 To start the container manually:
 ```bash
-docker run --name vllm-gemma4 -d -p 8000:11434 -v ollama_local_volume:/root/.ollama ollama/ollama:latest
+docker run --name gemma4 -d -p 8000:11434 -e OLLAMA_NUM_THREADS=4 -v ollama_local_volume:/root/.ollama ollama/ollama:latest
 ```
 
 ### 2. Pull the model
 Download the Gemma 4 model inside the container:
 ```bash
-docker exec -t vllm-gemma4 ollama pull gemma4:e2b
+docker exec -t gemma4 ollama pull gemma4:e2b
 ```
 
 ### 3. Verification

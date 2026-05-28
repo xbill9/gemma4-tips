@@ -34,7 +34,7 @@ Start the container and pull the model:
 ```bash
 make run
 ```
-You can also use the [manage_docker](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L125) tool with action `start` to automatically run and pull the model.
+You can also use the [manage_docker](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L127) tool with action `start` to automatically run and pull the model.
 
 ### Step 2: Run the MCP Server
 Install dependencies and run the server locally:
@@ -47,21 +47,27 @@ make run
 
 The following tools are available via the MCP server:
 
-### Infrastructure & Deployment
-*   **[manage_docker](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L125)**: Manages the local container (`start`, `stop`, `restart`, `status`, `log`, and `rm` actions).
+### Deployment & Configuration
+*   **[manage_docker](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L127)**: Manages the local container (`start`, `stop`, `restart`, `status`, `log`, and `rm` actions).
+*   **[save_hf_token](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L113)**: Securely saves a Hugging Face API token locally.
 
-### Observability & Performance
-*   **[get_system_status](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L160)**: Provides a high-level status dashboard of the local Docker container and vLLM service.
+### Monitoring & Status
+*   **[get_system_status](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L162)**: Provides a high-level status dashboard of the local Docker container and vLLM service.
 *   **[get_endpoint](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L194)**: Verifies local endpoint connectivity and returns the active service URL.
-*   **[verify_model_health](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L84)**: Runs a health check by querying the model with a simple prompt.
-*   **[run_vllm_benchmark](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L284)**: Runs vLLM's internal serving benchmark tool inside the local container.
-*   **[get_docker_logs](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L352)**: Streams startup and execution logs from the local Docker container.
-*   **[analyze_local_logs](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L364)**: Fetches the local container logs and uses Gemma 4 to analyze them for SRE issues.
+*   **[get_active_models](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L456)**: Gets active resource usage (actively loaded models, sizes, CPU/GPU status, context size) via `ollama ps` (Ollama backend only).
+*   **[get_help](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L418)**: Provides help text and summarizes the configuration options and all available SRE/DevOps tools.
 
-### AI & Interaction
+### Performance & Benchmarking
+*   **[run_benchmark](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L286)**: Runs vLLM's internal serving benchmark tool inside the local container, or falls back to local benchmarking suite.
+*   **[get_docker_logs](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L359)**: Streams startup and execution logs from the local Docker container.
+*   **[analyze_local_logs](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L371)**: Fetches the local container logs and uses Gemma 4 to analyze them for SRE issues.
+
+### AI & Diagnostics
 *   **[query_gemma4](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L205)**: Primary tool for interacting with the self-hosted local model.
-*   **[query_gemma4_with_stats](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L223)**: Provides streaming responses with TTFT and total latency metrics.
-*   **[save_hf_token](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L111)**: Securely saves a Hugging Face API token locally.
+*   **[query_gemma4_with_stats](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L225)**: Provides streaming responses with TTFT and total latency metrics.
+*   **[verify_model_health](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L84)**: Performs a health check by querying the model with a simple prompt and measuring response latency.
+*   **[get_system_details](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L390)**: Retrieves detailed information about the running local model, engine, and versions.
+*   **[get_model_show_details](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L469)**: Gets deep model parameters, architecture, license, and config details via `ollama show <model_name>` (Ollama backend only).
 
 ## 🌟 Grand Demo
 A standalone demo script is included to showcase the agent's capabilities:

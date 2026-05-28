@@ -93,6 +93,8 @@ async def verify_model_health() -> str:
         )
         end_time = time.monotonic()
         latency = end_time - start_time
+        if not chat_completion.choices:
+            return "❌ Model health check FAILED: No choices returned."
         response_content = chat_completion.choices[0].message.content
 
         if response_content:
@@ -128,17 +130,17 @@ async def manage_docker(action: str = "status") -> str:
     ollama_model = get_current_model_name()
     docker_run_cmd = os.getenv(
         "LOCAL_DOCKER_RUN_CMD",
-        f"docker run --name vllm-gemma4 -d -p {LOCAL_VLLM_PORT}:11434 "
-        f"-e OLLAMA_KV_CACHE_TYPE=q4_0 -e OLLAMA_NUM_PARALLEL=1 "
+        f"docker run --name gemma4 -d -p {LOCAL_VLLM_PORT}:11434 "
+        f"-e OLLAMA_KV_CACHE_TYPE=q4_0 -e OLLAMA_NUM_PARALLEL=1 -e OLLAMA_NUM_THREADS=4 "
         f"-v ollama_local_volume:/root/.ollama {LOCAL_DOCKER_IMAGE}",
     )
     commands = {
-        "start": f"(docker start vllm-gemma4 || {docker_run_cmd}) && sleep 2 && docker exec -d vllm-gemma4 ollama pull {ollama_model}",
-        "stop": "docker stop vllm-gemma4",
-        "restart": "docker restart vllm-gemma4",
-        "status": "docker ps -a --filter name=vllm-gemma4",
-        "log": "docker logs --tail 100 vllm-gemma4",
-        "rm": "docker rm -f vllm-gemma4",
+        "start": f"(docker start gemma4 || {docker_run_cmd}) && sleep 2 && docker exec -d gemma4 ollama pull {ollama_model}",
+        "stop": "docker stop gemma4",
+        "restart": "docker restart gemma4",
+        "status": "docker ps -a --filter name=gemma4",
+        "log": "docker logs --tail 100 gemma4",
+        "rm": "docker rm -f gemma4",
     }
     cmd_str = commands.get(action, commands["status"])
     process = await asyncio.create_subprocess_shell(
@@ -167,13 +169,11 @@ async def get_system_status() -> str:
 
     docker_status = "🔴 Unknown (Container check failed)"
     try:
-        rc, out, _ = await run_command(
-            ["docker", "ps", "-a", "--filter", "name=vllm-gemma4", "--format", "{{.Status}}"]
-        )
+        rc, out, _ = await run_command(["docker", "ps", "-a", "--filter", "name=gemma4", "--format", "{{.Status}}"])
         if rc == 0 and out:
             docker_status = f"🟢 Running ({out})" if "Up" in out else f"🔴 Stopped ({out})"
         elif rc == 0:
-            docker_status = "🔴 Not Created (Container 'vllm-gemma4' does not exist)"
+            docker_status = "🔴 Not Created (Container 'gemma4' does not exist)"
     except Exception as e:
         docker_status = f"🔴 Error checking container: {e}"
 
@@ -211,9 +211,11 @@ async def query_gemma4(prompt: str) -> str:
             messages=[{"role": "user", "content": prompt}],
             model=get_current_model_name(),
         )
+        if not chat_completion.choices:
+            return "❌ Query failed: No choices returned from model."
         response = chat_completion.choices[0].message.content or "No response from model."
         logger.info(f"Model response: '{response[:100]}...'")
-        return response or "No response from model."
+        return response
     except Exception as e:
         logger.error(f"Error querying model: {e}")
         return f"❌ An error occurred while querying the model: {e}"
@@ -281,7 +283,7 @@ async def query_gemma4_with_stats(prompt: str) -> str:
 
 
 @mcp.tool()
-async def run_vllm_benchmark(
+async def run_benchmark(
     backend: str = "vllm",
     model: str = "google/gemma-4-E2B-it",
     dataset_name: str = "random",
@@ -311,6 +313,11 @@ async def run_vllm_benchmark(
             "--output",
             os.path.join(current_dir, "benchmark_results.csv"),
         ]
+        if max_concurrency:
+            concs = [c for c in [1, 2, 4, 8, 16, 32, 64] if c <= max_concurrency]
+            if max_concurrency not in concs:
+                concs.append(max_concurrency)
+            cmd.extend(["--concurrencies", ",".join(map(str, concs))])
         rc, out, err = await run_command(cmd, timeout=600)
         if rc != 0:
             return f"⚠️ Local benchmark failed.\nError: {err}\nOutput: {out}"
@@ -330,7 +337,7 @@ async def run_vllm_benchmark(
 
     docker_cmd = (
         f"docker run --rm -v /dev/shm:/dev/shm --shm-size 10gb "
-        f"-e HF_TOKEN=$(docker exec vllm-gemma4 env | grep HF_TOKEN | cut -d= -f2 || echo '') "
+        f"-e HF_TOKEN=$(docker exec gemma4 env | grep HF_TOKEN | cut -d= -f2 || echo '') "
         f"{LOCAL_DOCKER_IMAGE} {benchmark_cmd}"
     )
     process = await asyncio.create_subprocess_shell(
@@ -351,7 +358,7 @@ async def run_vllm_benchmark(
 @mcp.tool()
 async def get_docker_logs(tail: Optional[int] = None) -> str:
     """Retrieves logs from the local vLLM/Ollama Docker container."""
-    log_cmd = "docker logs vllm-gemma4"
+    log_cmd = "docker logs gemma4"
     if tail:
         log_cmd += f" --tail {tail}"
     rc, out, err = await run_command(shlex.split(log_cmd))
@@ -380,7 +387,7 @@ async def analyze_local_logs(limit: int = 15) -> str:
 
 
 @mcp.tool()
-async def get_model_details() -> str:
+async def get_system_details() -> str:
     """Retrieves detailed information about the running local model, engine, and versions."""
     report = f"### 🧩 Model Details ({VLLM_URL})\n\n"
 
@@ -434,14 +441,14 @@ async def get_help() -> str:
         "- **`get_model_show_details`**: Gets deep model parameters, architecture, license, and config details via ollama show.\n"
         "- **`get_help`**: Provides this help text and summarizes configuration/tools.\n\n"
         "#### 📈 Performance & Benchmarking\n"
-        "- **`run_vllm_benchmark`**: Runs vLLM's internal serving benchmark tool inside the local container.\n"
+        "- **`run_benchmark`**: Runs vLLM's internal serving benchmark tool inside the local container.\n"
         "- **`get_docker_logs`**: Retrieves startup and execution logs from the local Docker container.\n"
         "- **`analyze_local_logs`**: Fetches the local container logs and uses Gemma 4 to analyze them for SRE/DevOps errors.\n\n"
         "#### 💬 Interaction & Diagnostics\n"
         "- **`query_gemma4`**: Primary tool to query the self-hosted local model.\n"
         "- **`query_gemma4_with_stats`**: Queries the local model and provides streaming-based performance metrics (TTFT, throughput, latency).\n"
         "- **`verify_model_health`**: Performs a deep health check by querying the model with a simple prompt and measuring response latency.\n"
-        "- **`get_model_details`**: Retrieves detailed information about the running local model, engine, and versions.\n"
+        "- **`get_system_details`**: Retrieves detailed information about the running local model, engine, and versions.\n"
     )
 
 
@@ -451,7 +458,7 @@ async def get_active_models() -> str:
     if "ollama" not in LOCAL_DOCKER_IMAGE.lower():
         return "❌ Active resource usage (ollama ps) is only supported on Ollama backend."
 
-    cmd = ["docker", "exec", "vllm-gemma4", "ollama", "ps"]
+    cmd = ["docker", "exec", "gemma4", "ollama", "ps"]
     rc, out, err = await run_command(cmd, timeout=30)
     if rc != 0:
         return f"⚠️ Failed to check active models.\nError: {err}\nOutput: {out}"
@@ -464,7 +471,7 @@ async def get_model_show_details(model_name: str) -> str:
     if "ollama" not in LOCAL_DOCKER_IMAGE.lower():
         return "❌ Deep model details (ollama show) are only supported on Ollama backend."
 
-    cmd = ["docker", "exec", "vllm-gemma4", "ollama", "show", model_name]
+    cmd = ["docker", "exec", "gemma4", "ollama", "show", model_name]
     rc, out, err = await run_command(cmd, timeout=30)
     if rc != 0:
         return f"⚠️ Failed to get model details for {model_name}.\nError: {err}\nOutput: {out}"

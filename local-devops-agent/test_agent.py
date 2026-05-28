@@ -24,7 +24,8 @@ mock_mcp.resource = mock_decorator
 from server import (  # noqa: E402
     MODEL_NAME,
     get_help,
-    get_model_details,
+    get_system_details,
+    query_gemma4,
     query_gemma4_with_stats,
     save_hf_token,
     verify_model_health,
@@ -53,6 +54,34 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("READY", result)
 
     @patch("server.get_vllm_client", new_callable=AsyncMock)
+    async def test_verify_model_health_empty_choices(self, mock_get_client):
+        """Test model health check when choices list is empty."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = []
+
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        result = await verify_model_health()
+        self.assertIn("❌ Model health check FAILED: No choices returned.", result)
+
+    @patch("server.get_vllm_client", new_callable=AsyncMock)
+    async def test_query_gemma4_empty_choices(self, mock_get_client):
+        """Test query_gemma4 when choices list is empty."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = []
+
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        result = await query_gemma4("Hello")
+        self.assertIn("❌ Query failed: No choices returned from model.", result)
+
+    @patch("server.get_vllm_client", new_callable=AsyncMock)
     async def test_query_gemma4_with_stats_success(self, mock_get_client):
         """Test query with performance metrics."""
         mock_client = MagicMock()
@@ -79,7 +108,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
 
     @patch("server.VLLM_URL", "http://test-url:8000")
     @patch("httpx.AsyncClient", autospec=True)
-    async def test_get_model_details_success(self, mock_async_client):
+    async def test_get_system_details_success(self, mock_async_client):
         """Test retrieving model stats."""
 
         # Mock httpx.AsyncClient and its get method
@@ -97,7 +126,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             mock_health_response,
         ]
 
-        result = await get_model_details()
+        result = await get_system_details()
         self.assertIn("### 🧩 Model Details", result)
         self.assertIn("test-model", result)
         self.assertIn("Healthy", result)
@@ -120,17 +149,17 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
 
     @patch("server.run_command", new_callable=AsyncMock)
     @patch("os.path.exists", return_value=True)
-    async def test_run_vllm_benchmark_ollama(self, mock_exists, mock_run_command):
-        """Test run_vllm_benchmark falls back to local script when Ollama is running."""
+    async def test_run_benchmark_ollama(self, mock_exists, mock_run_command):
+        """Test run_benchmark falls back to local script when Ollama is running."""
         import server
-        from server import run_vllm_benchmark
+        from server import run_benchmark
 
         original_image = server.LOCAL_DOCKER_IMAGE
         server.LOCAL_DOCKER_IMAGE = "ollama/ollama:latest"
         try:
             mock_run_command.return_value = (0, "Mock benchmark output", "")
 
-            result = await run_vllm_benchmark(num_prompts=5, random_output_len=10)
+            result = await run_benchmark(num_prompts=5, random_output_len=10)
             self.assertIn("✅ Local benchmark completed", result)
             self.assertIn("Mock benchmark output", result)
             mock_run_command.assert_called_once()
@@ -144,11 +173,33 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         finally:
             server.LOCAL_DOCKER_IMAGE = original_image
 
-    @patch("asyncio.create_subprocess_shell", new_callable=AsyncMock)
-    async def test_run_vllm_benchmark_vllm(self, mock_subprocess):
-        """Test run_vllm_benchmark uses docker run with vllm bench serve for vLLM images."""
+    @patch("server.run_command", new_callable=AsyncMock)
+    @patch("os.path.exists", return_value=True)
+    async def test_run_benchmark_ollama_with_concurrency(self, mock_exists, mock_run_command):
+        """Test run_benchmark passes --concurrencies when max_concurrency is specified."""
         import server
-        from server import run_vllm_benchmark
+        from server import run_benchmark
+
+        original_image = server.LOCAL_DOCKER_IMAGE
+        server.LOCAL_DOCKER_IMAGE = "ollama/ollama:latest"
+        try:
+            mock_run_command.return_value = (0, "Mock benchmark output", "")
+
+            result = await run_benchmark(num_prompts=5, random_output_len=10, max_concurrency=4)
+            self.assertIn("✅ Local benchmark completed", result)
+            mock_run_command.assert_called_once()
+            # Verify the args passed to run_command
+            called_args = mock_run_command.call_args[0][0]
+            self.assertIn("--concurrencies", called_args)
+            self.assertIn("1,2,4", called_args)
+        finally:
+            server.LOCAL_DOCKER_IMAGE = original_image
+
+    @patch("asyncio.create_subprocess_shell", new_callable=AsyncMock)
+    async def test_run_benchmark_vllm(self, mock_subprocess):
+        """Test run_benchmark uses docker run with vllm bench serve for vLLM images."""
+        import server
+        from server import run_benchmark
 
         original_image = server.LOCAL_DOCKER_IMAGE
         server.LOCAL_DOCKER_IMAGE = "vllm/vllm-openai:latest"
@@ -158,7 +209,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             mock_process.returncode = 0
             mock_subprocess.return_value = mock_process
 
-            result = await run_vllm_benchmark(num_prompts=5, random_output_len=10)
+            result = await run_benchmark(num_prompts=5, random_output_len=10)
             self.assertIn("✅ Local benchmark completed", result)
             self.assertIn("vllm output", result)
             mock_subprocess.assert_called_once()
@@ -181,7 +232,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             self.assertIn("gemma4:e2b", result)
             mock_run_command.assert_called_once()
             called_cmd = mock_run_command.call_args[0][0]
-            self.assertEqual(called_cmd, ["docker", "exec", "vllm-gemma4", "ollama", "ps"])
+            self.assertEqual(called_cmd, ["docker", "exec", "gemma4", "ollama", "ps"])
         finally:
             server.LOCAL_DOCKER_IMAGE = original_image
 
@@ -213,7 +264,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             self.assertIn("architecture gemma4", result)
             mock_run_command.assert_called_once()
             called_cmd = mock_run_command.call_args[0][0]
-            self.assertEqual(called_cmd, ["docker", "exec", "vllm-gemma4", "ollama", "show", "gemma4:e2b"])
+            self.assertEqual(called_cmd, ["docker", "exec", "gemma4", "ollama", "show", "gemma4:e2b"])
         finally:
             server.LOCAL_DOCKER_IMAGE = original_image
 

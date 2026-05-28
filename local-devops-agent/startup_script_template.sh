@@ -70,11 +70,11 @@ echo "HF_TOKEN set (value masked for security)."
 
 echo "Attempting to start vLLM container..."
 # Stop and remove any existing container with the same name to ensure a clean start
-sudo docker stop vllm-gemma4 > /dev/null 2>&1 || true
-sudo docker rm vllm-gemma4 > /dev/null 2>&1 || true
+sudo docker stop gemma4 > /dev/null 2>&1 || true
+sudo docker rm gemma4 > /dev/null 2>&1 || true
 
 # Log the full docker run command before executing it
-echo "Executing command: sudo docker run --name vllm-gemma4 --privileged --net=host -d \\
+echo "Executing command: sudo docker run --name gemma4 --privileged --net=host -d \\
   -v /dev/shm:/dev/shm --shm-size 10gb \\
   -e HF_HOME=\"$HF_HOME\" \\
   -e HF_TOKEN=\"$HF_TOKEN\" \\
@@ -88,7 +88,7 @@ echo "Executing command: sudo docker run --name vllm-gemma4 --privileged --net=h
   --reasoning-parser gemma4 \\
   --verbose"
 
-sudo docker run --name vllm-gemma4 --privileged --net=host -d \
+sudo docker run --name gemma4 --privileged --net=host -d \
   -v /dev/shm:/dev/shm --shm-size 10gb \
   -e HF_HOME="$HF_HOME" \
   -e HF_TOKEN="$HF_TOKEN" \
@@ -104,14 +104,14 @@ sudo docker run --name vllm-gemma4 --privileged --net=host -d \
 
 if [ $? -ne 0 ]; then
   echo "ERROR: Docker run command failed. Check parameters and image."
-  sudo docker logs vllm-gemma4 || echo "Could not fetch logs for failed container."
+  sudo docker logs gemma4 || echo "Could not fetch logs for failed container."
   exit 1
 fi
 
 echo "Docker container started. Waiting for 'Application startup complete.' in logs (up to 20 minutes)..."
 HEALTHY=0
 for i in $(seq 1 120); do
-  if sudo docker logs vllm-gemma4 2>&1 | grep -q "Application startup complete."; then
+  if sudo docker logs gemma4 2>&1 | grep -q "Application startup complete."; then
     echo "vLLM 'Application startup complete.' message found in logs."
     HEALTHY=1
     break
@@ -122,8 +122,8 @@ done
 
 if [ "$HEALTHY" -eq 0 ]; then
   echo "ERROR: vLLM did not report 'Application startup complete.' within the timeout."
-  echo "Attempting to retrieve Docker logs for 'vllm-gemma4':"
-  sudo docker logs vllm-gemma4 || echo "Could not retrieve Docker logs."
+  echo "Attempting to retrieve Docker logs for 'gemma4':"
+  sudo docker logs gemma4 || echo "Could not retrieve Docker logs."
   exit 1
 fi
 
