@@ -5,11 +5,11 @@ from google.adk.models.lite_llm import LiteLlm
 
 # --- Example Agent using a Gemma 4 model hosted on a vLLM endpoint ---
 
-# Endpoint URL provided by your vLLM deployment
-api_base_url = "http://34.39.243.194:8000/v1"
+# Endpoint URL provided by your local deployment
+api_base_url = "http://localhost:8000/v1"
 
-# Model name as recognized by *your* vLLM endpoint configuration
-model_name_at_endpoint = os.getenv("MODEL_NAME", "openai/google/gemma-4-31B-it")
+# Model name as recognized by *your* local endpoint configuration
+model_name_at_endpoint = os.getenv("MODEL_NAME", "openai/gemma4:e2b")
 
 # Authentication (Example: using gcloud identity token for a Cloud Run deployment)
 # Adapt this based on your endpoint's security

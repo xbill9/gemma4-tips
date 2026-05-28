@@ -21,17 +21,11 @@ def mock_decorator(*args, **kwargs):
 mock_mcp.tool = mock_decorator
 mock_mcp.resource = mock_decorator
 
-sys.modules["google.cloud"] = MagicMock()
-sys.modules["google.cloud.storage"] = MagicMock()
-sys.modules["google.cloud.logging"] = MagicMock()
-sys.modules["google.cloud.secretmanager"] = MagicMock()
-
-# Now import the functions to test
 from server import (  # noqa: E402
     MODEL_NAME,
+    get_help,
     get_model_details,
-    get_vllm_deployment_config,
-    query_queued_gemma4_with_stats,
+    query_gemma4_with_stats,
     save_hf_token,
     verify_model_health,
 )
@@ -42,27 +36,9 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         """Verify the default model is Gemma 4."""
         self.assertEqual(MODEL_NAME, "google/gemma-4-E2B-it")
 
-    @patch("server.get_secret", new_callable=AsyncMock)
-    @patch("server.run_command", new_callable=AsyncMock)
-    async def test_get_vllm_deployment_config(self, mock_run_command, mock_get_secret):
-        """Test TPU deployment config generation."""
-        mock_get_secret.return_value = "dummy-hf-token"
-        # Mock run_command to prevent actual gcloud calls during this test
-        mock_run_command.return_value = 0, "", ""
-
-        config = await get_vllm_deployment_config(service_name="test-vllm", model_name="google/gemma-4-31B-it")
-        self.assertIn("gcloud alpha compute tpus tpu-vm create test-vllm", config)
-        self.assertIn("--accelerator-type=v6e-8", config)
-        self.assertIn("--version=v2-alpha-tpuv6e", config)
-
-        self.assertIn("vllm/vllm-tpu:nightly", config)
-        self.assertIn("google/gemma-4-31B-it", config)
-
     @patch("server.get_vllm_client", new_callable=AsyncMock)
-    @patch("server.discover_vllm_url", new_callable=AsyncMock)
-    async def test_verify_model_health_success(self, mock_discover_url, mock_get_client):
+    async def test_verify_model_health_success(self, mock_get_client):
         """Test successful model health check."""
-        mock_discover_url.return_value = "http://test-url:8000"
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
@@ -77,7 +53,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("READY", result)
 
     @patch("server.get_vllm_client", new_callable=AsyncMock)
-    async def test_query_queued_gemma4_with_stats_success(self, mock_get_client):
+    async def test_query_gemma4_with_stats_success(self, mock_get_client):
         """Test query with performance metrics."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
@@ -96,16 +72,15 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         mock_stream.__aiter__.return_value = [chunk1, chunk2]
         mock_client.chat.completions.create = AsyncMock(return_value=mock_stream)
 
-        result = await query_queued_gemma4_with_stats("Hi")
+        result = await query_gemma4_with_stats("Hi")
         self.assertIn("Hello world", result)
         self.assertIn("Performance Stats", result)
         self.assertIn("TTFT", result)
 
-    @patch("server.discover_vllm_url", new_callable=AsyncMock)
+    @patch("server.VLLM_URL", "http://test-url:8000")
     @patch("httpx.AsyncClient", autospec=True)
-    async def test_get_model_details_success(self, mock_async_client, mock_discover_url):
+    async def test_get_model_details_success(self, mock_async_client):
         """Test retrieving model stats."""
-        mock_discover_url.return_value = "http://test-url:8000"
 
         # Mock httpx.AsyncClient and its get method
         mock_client_instance = mock_async_client.return_value.__aenter__.return_value
@@ -114,50 +89,146 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         mock_models_response.json.return_value = {"data": [{"id": "test-model", "max_model_len": 4096}]}
         mock_models_response.status_code = 200
 
-        mock_version_response = MagicMock()
-        mock_version_response.json.return_value = {"version": "test-version"}
-        mock_version_response.status_code = 200
-
         mock_health_response = MagicMock()
         mock_health_response.status_code = 200
 
-        mock_metrics_response = MagicMock()
-        mock_metrics_response.text = "vllm_requests_running 1"
-        mock_metrics_response.status_code = 200
-
         mock_client_instance.get.side_effect = [
             mock_models_response,
-            mock_version_response,
             mock_health_response,
-            mock_metrics_response,
         ]
 
         result = await get_model_details()
-        self.assertIn("### 🧩 Model & vLLM Engine Details", result)
+        self.assertIn("### 🧩 Model Details", result)
         self.assertIn("test-model", result)
-        self.assertIn("test-version", result)
         self.assertIn("Healthy", result)
-        self.assertIn("vllm_requests_running", result)
 
-    @patch("server.secretmanager.SecretManagerServiceClient")
-    @patch("server.get_secret", new_callable=AsyncMock)  # Mock get_secret to prevent actual calls
-    async def test_save_hf_token(self, mock_get_secret, mock_secret_client):
-        """Test saving HF token to Secret Manager."""
-        with patch("server.LOCAL_DEPLOYMENT", False):
-            mock_instance = mock_secret_client.return_value
-            mock_instance.add_secret_version.return_value.name = "projects/test-project/secrets/hf-token/versions/1"
+    @patch("os.makedirs")
+    @patch("builtins.open", create=True)
+    async def test_save_hf_token(self, mock_open, mock_makedirs):
+        """Test saving HF token locally."""
+        result = await save_hf_token("test-token")
+        self.assertIn("✅ Token saved locally", result)
+        mock_makedirs.assert_called_once()
+        mock_open.assert_called_once()
 
-            # Mock get_secret to simulate secret existence check.
-            # First call: simulate secret not found (raises exception)
-            # Second call: simulate secret found (returns a dummy secret)
-            mock_instance.get_secret.side_effect = [Exception("Secret not found"), MagicMock()]
-            mock_instance.create_secret.return_value = None  # Mock create_secret if it doesn't exist
+    async def test_get_help(self):
+        """Test retrieving the help summary of options."""
+        result = await get_help()
+        self.assertIn("Local Gemma 4 SRE Agent Help & Configuration", result)
+        self.assertIn("MODEL_NAME", result)
+        self.assertIn("LOCAL_DOCKER_IMAGE", result)
 
-            # Test successful save (secret is created and version added)
-            result = await save_hf_token("test-token")
-            self.assertIn("✅ Token saved.", result)
-            mock_instance.create_secret.assert_called_once()
-            mock_instance.add_secret_version.assert_called_once()
+    @patch("server.run_command", new_callable=AsyncMock)
+    @patch("os.path.exists", return_value=True)
+    async def test_run_vllm_benchmark_ollama(self, mock_exists, mock_run_command):
+        """Test run_vllm_benchmark falls back to local script when Ollama is running."""
+        import server
+        from server import run_vllm_benchmark
+
+        original_image = server.LOCAL_DOCKER_IMAGE
+        server.LOCAL_DOCKER_IMAGE = "ollama/ollama:latest"
+        try:
+            mock_run_command.return_value = (0, "Mock benchmark output", "")
+
+            result = await run_vllm_benchmark(num_prompts=5, random_output_len=10)
+            self.assertIn("✅ Local benchmark completed", result)
+            self.assertIn("Mock benchmark output", result)
+            mock_run_command.assert_called_once()
+            # Verify the args passed to run_command
+            called_args = mock_run_command.call_args[0][0]
+            self.assertIn("benchmarking_suite.py", called_args[1])
+            self.assertIn("--requests", called_args)
+            self.assertIn("5", called_args)
+            self.assertIn("--tokens", called_args)
+            self.assertIn("10", called_args)
+        finally:
+            server.LOCAL_DOCKER_IMAGE = original_image
+
+    @patch("asyncio.create_subprocess_shell", new_callable=AsyncMock)
+    async def test_run_vllm_benchmark_vllm(self, mock_subprocess):
+        """Test run_vllm_benchmark uses docker run with vllm bench serve for vLLM images."""
+        import server
+        from server import run_vllm_benchmark
+
+        original_image = server.LOCAL_DOCKER_IMAGE
+        server.LOCAL_DOCKER_IMAGE = "vllm/vllm-openai:latest"
+        try:
+            mock_process = AsyncMock()
+            mock_process.communicate.return_value = (b"vllm output", b"")
+            mock_process.returncode = 0
+            mock_subprocess.return_value = mock_process
+
+            result = await run_vllm_benchmark(num_prompts=5, random_output_len=10)
+            self.assertIn("✅ Local benchmark completed", result)
+            self.assertIn("vllm output", result)
+            mock_subprocess.assert_called_once()
+            called_cmd = mock_subprocess.call_args[0][0]
+            self.assertIn("vllm bench serve", called_cmd)
+        finally:
+            server.LOCAL_DOCKER_IMAGE = original_image
+
+    @patch("server.run_command", new_callable=AsyncMock)
+    async def test_get_active_models_ollama(self, mock_run_command):
+        """Test get_active_models runs docker exec ollama ps on Ollama backend."""
+        import server
+        from server import get_active_models
+
+        original_image = server.LOCAL_DOCKER_IMAGE
+        server.LOCAL_DOCKER_IMAGE = "ollama/ollama:latest"
+        try:
+            mock_run_command.return_value = (0, "gemma4:e2b   7.7 GB   100% CPU", "")
+            result = await get_active_models()
+            self.assertIn("gemma4:e2b", result)
+            mock_run_command.assert_called_once()
+            called_cmd = mock_run_command.call_args[0][0]
+            self.assertEqual(called_cmd, ["docker", "exec", "vllm-gemma4", "ollama", "ps"])
+        finally:
+            server.LOCAL_DOCKER_IMAGE = original_image
+
+    async def test_get_active_models_vllm(self):
+        """Test get_active_models returns not supported on vLLM backend."""
+        import server
+        from server import get_active_models
+
+        original_image = server.LOCAL_DOCKER_IMAGE
+        server.LOCAL_DOCKER_IMAGE = "vllm/vllm-openai:latest"
+        try:
+            result = await get_active_models()
+            self.assertIn("only supported on Ollama backend", result)
+        finally:
+            server.LOCAL_DOCKER_IMAGE = original_image
+
+    @patch("server.run_command", new_callable=AsyncMock)
+    async def test_get_model_show_details_ollama(self, mock_run_command):
+        """Test get_model_show_details runs docker exec ollama show on Ollama backend."""
+        import server
+        from server import get_model_show_details
+
+        original_image = server.LOCAL_DOCKER_IMAGE
+        server.LOCAL_DOCKER_IMAGE = "ollama/ollama:latest"
+        try:
+            mock_run_command.return_value = (0, "architecture gemma4\nparameters 5.1B", "")
+            result = await get_model_show_details("gemma4:e2b")
+            self.assertIn("gemma4:e2b", result)
+            self.assertIn("architecture gemma4", result)
+            mock_run_command.assert_called_once()
+            called_cmd = mock_run_command.call_args[0][0]
+            self.assertEqual(called_cmd, ["docker", "exec", "vllm-gemma4", "ollama", "show", "gemma4:e2b"])
+        finally:
+            server.LOCAL_DOCKER_IMAGE = original_image
+
+    async def test_get_model_show_details_vllm(self):
+        """Test get_model_show_details returns not supported on vLLM backend."""
+        import server
+        from server import get_model_show_details
+
+        original_image = server.LOCAL_DOCKER_IMAGE
+        server.LOCAL_DOCKER_IMAGE = "vllm/vllm-openai:latest"
+        try:
+            result = await get_model_show_details("gemma4:e2b")
+            self.assertIn("only supported on Ollama backend", result)
+        finally:
+            server.LOCAL_DOCKER_IMAGE = original_image
 
 
 if __name__ == "__main__":

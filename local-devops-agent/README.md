@@ -1,69 +1,40 @@
-# TPU vLLM DevOps Agent (MCP Server)
+# Local Gemma 4 DevOps Agent (MCP Server)
 
 ## Role
-This project functions as an expert TPU SRE and DevOps Engineer, specialized in the **Gemma 4** ecosystem. Its primary goal is to manage the self-hosted inference stack and leverage it for infrastructure analysis.
+This project functions as an expert DevOps and SRE Engineer, specialized in the **Gemma 4** ecosystem. Its primary goal is to manage the local self-hosted inference stack and leverage it for local infrastructure analysis.
 
-This project provides an automated DevOps/SRE assistant that leverages **Gemma 4 models self-hosted via vLLM on Cloud TPUs**. It bridges Google Cloud Logging with a private inference endpoint to analyze infrastructure issues and suggest remediations.
+This project provides an automated DevOps/SRE assistant that leverages **Gemma 4 models self-hosted locally via Docker (Ollama/vLLM)**. It analyzes local infrastructure issues and logs to suggest remediations.
 
 ## 🟢 Current Status: ONLINE
-The Gemma 4 inference stack is currently deployed and active on TPU v6e-8.
-*   **Active Endpoint:** `http://YOUR_TPU_IP_ADDRESS:8000`
-*   **Model:** `google/gemma-4-31B-it`
+The Gemma 4 inference stack is currently deployed and active locally.
+*   **Active Endpoint:** `http://localhost:8000`
+*   **Model:** `google/gemma-4-E2B-it` (running locally as `gemma4:e2b`)
 
 ## 🚀 Deployment Requirements
 
-To deploy and run this project, you need to address two main components: the **Inference Stack** (vLLM on TPU v6e) and the **MCP Server** itself.
+To deploy and run this project, you need to address two main components: the **Inference Stack** (Ollama/vLLM on Docker) and the **MCP Server** itself.
 
 ### 1. Infrastructure Requirements (The Inference Stack)
-The MCP server expects a running vLLM instance. Your TPU deployment for the model needs:
-*   **Hardware:** Cloud TPU v6e (Trillium) with topology `2x4` (8 chips).
-*   **Software:** `vllm/vllm-tpu:nightly` specialized container (v0.19.2+ recommended for Gemma 4 fixes).
-*   **Model:** `google/gemma-4-31B-it` (Hugging Face ID).
-*   **Runtime:** `v2-alpha-tpuv6e` for Flex-start / Queued Resources.
-*   **Networking:** Private Google Access must be enabled for internal connectivity, or direct internet access for Hugging Face downloads.
+The MCP server expects a running local OpenAI-compatible inference instance. Your local Docker deployment needs:
+*   **Hardware:** Local machine or VM with sufficient CPU/GPU resources.
+*   **Software:** Docker with `ollama/ollama:latest` or `vllm/vllm-tpu` (run in CPU/GPU mode).
+*   **Model:** `gemma4:e2b` (Ollama ID) or `google/gemma-4-E2B-it`.
+*   **Networking:** Host port 8000 mapped to the container's serving port.
 
-### 2. Software & API Dependencies
-The agent relies on several Google Cloud services and Python libraries:
-*   **Libraries:** `mcp`, `fastmcp`, `google-cloud-logging`, `google-cloud-secret-manager`, `openai`, and `httpx`.
-*   **Permissions:** The service account running the agent needs:
-    *   `logging.logEntries.list` (to read logs).
-    *   `tpu.nodes.get` and `tpu.nodes.list` (for discovery).
-    *   `secretmanager.versions.access` (for Hugging Face tokens).
-
-### 3. Environment Variables
+### 2. Environment Variables
 You can configure the following variables for the MCP server:
-*   `GOOGLE_CLOUD_PROJECT`: Your GCP Project ID (defaults to `aisprint-491218`).
-*   `MODEL_NAME`: The model identifier used by vLLM (defaults to `google/gemma-4-31B-it`).
-
-## Technical Standards
--   **vLLM API:** OpenAI-compatible endpoint at `/v1/chat/completions`.
--   **Optimization Flags:**
-    -   `--tensor-parallel-size 8`
-    -   `--max-model-len 16384`
-    -   `--disable_chunked_mm_input`
-    -   `--max_num_batched_tokens 4096` (required for multimodal compatibility)
-    -   `--limit-mm-per-prompt '{"image":4,"audio":1}'` (JSON format required in nightly)
--   **Tooling:** Enable `--enable-auto-tool-choice`, `--tool-call-parser gemma4`, and `--reasoning-parser gemma4`.
-
-## Flex-start VMs
-Our stack leverages **Flex-start VMs** (via the `v2-alpha-tpuv6e` runtime) to maximize TPU availability and minimize costs.
-
-### Key Characteristics
-*   **Dynamic Workload Scheduler (DWS):** Provisions resources from a secure pool, increasing the probability of securing high-demand TPU v6e chips.
-*   **Wait-Time Mechanism:** Requests can wait up to 2 hours for resources if capacity is full.
-*   **Execution Limit:** VMs have a maximum run duration of **7 days**, requiring `maxRunDuration` and a termination action.
-*   **Dense Placement:** TPU nodes are placed in close physical proximity to minimize network latency.
-*   **Cost Efficiency:** Offers discounted pricing for vCPUs, memory, and TPU accelerators.
-
-### Constraints
-*   **No Live Migration:** Flex-start VMs do not support live migration.
-*   **Quota Requirements:** Requires sufficient **preemptible quota**.
-*   **No Reservations:** These instances **cannot** consume existing TPU reservations.
+*   `MODEL_NAME`: The model identifier (defaults to `google/gemma-4-E2B-it`).
+*   `LOCAL_DOCKER_IMAGE`: The local Docker image to use (defaults to `ollama/ollama:latest`).
+*   `LOCAL_VLLM_PORT`: Port number for local API server (defaults to `8000`).
 
 ## 🛠 Usage & Setup
 
-### Step 1: Turnkey Deployment to TPU
-Use the `orchestrate_gemma4_stack` tool within the MCP server for a seamless setup, or use the `gcloud` command generated by `get_vllm_deployment_config`.
+### Step 1: Run the Local Inference Stack
+Start the container and pull the model:
+```bash
+make run
+```
+You can also use the [manage_docker](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L125) tool with action `start` to automatically run and pull the model.
 
 ### Step 2: Run the MCP Server
 Install dependencies and run the server locally:
@@ -77,33 +48,23 @@ make run
 The following tools are available via the MCP server:
 
 ### Infrastructure & Deployment
-*   **`orchestrate_gemma4_stack`**: Seamlessly provisions a TPU Queued Resource and deploys the optimized vLLM stack.
-*   **`get_vllm_deployment_config`**: Generates the exact `gcloud` command for manual TPU v6e deployment.
-*   **`get_vllm_tpu_deployment_config`**: Generates GKE manifests for TPU-based deployments.
-*   **`list_queued_resources`**: Lists all active and pending Queued Resources.
-*   **`describe_queued_resource`**: Fetches detailed JSON status for a specific TPU resource.
-*   **`check_tpu_availability`**: Simple check to see if a TPU resource is `ACTIVE`.
-*   **`destroy_queued_resource`**: Safely deletes a TPU resource and its node.
-*   **`manage_vllm_docker`**: Manages the vLLM Docker container on the TPU VM (`start`, `stop`, `restart`, `status`, `log`, and `rm` actions).
+*   **[manage_docker](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L125)**: Manages the local container (`start`, `stop`, `restart`, `status`, `log`, and `rm` actions).
 
 ### Observability & Performance
-*   **`get_system_status`**: Provides a high-level dashboard of TPU quota and vLLM health.
-*   **`check_tpu_utilization`**: Monitors real-time HBM and Tensor Core pressure via Docker logs.
-*   **`get_vllm_metrics`**: Fetches Prometheus metrics from the vLLM service.
-*   **`fetch_queued_node_logs`**: Streams startup and container logs from the TPU node.
-*   **`verify_model_health`**: Runs a deep logic check with latency reporting.
-*   **`run_load_test_benchmark`**: Performs an external load test and reports throughput and latency (Avg/P95).
-*   **`get_gemma4_full_report`**: Generates a comprehensive technical report of the entire stack.
-*   **`validate_gemma4_deployment`**: Performs a comprehensive sanity check on the stack.
+*   **[get_system_status](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L160)**: Provides a high-level status dashboard of the local Docker container and vLLM service.
+*   **[get_endpoint](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L194)**: Verifies local endpoint connectivity and returns the active service URL.
+*   **[verify_model_health](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L84)**: Runs a health check by querying the model with a simple prompt.
+*   **[run_vllm_benchmark](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L284)**: Runs vLLM's internal serving benchmark tool inside the local container.
+*   **[get_docker_logs](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L352)**: Streams startup and execution logs from the local Docker container.
+*   **[analyze_local_logs](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L364)**: Fetches the local container logs and uses Gemma 4 to analyze them for SRE issues.
 
 ### AI & Interaction
-*   **`query_queued_gemma4`**: Primary tool for interacting with the self-hosted model.
-*   **`query_vllm_with_metrics`**: Provides streaming responses with TTFT and total latency data.
-*   **`analyze_cloud_logging`**: Summarizes TPU-related errors using the self-hosted Gemma 4 model.
-*   **`save_hf_token`**: Securely saves a Hugging Face API token to GCP Secret Manager.
+*   **[query_gemma4](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L205)**: Primary tool for interacting with the self-hosted local model.
+*   **[query_gemma4_with_stats](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L223)**: Provides streaming responses with TTFT and total latency metrics.
+*   **[save_hf_token](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L111)**: Securely saves a Hugging Face API token locally.
 
 ## 🌟 Grand Demo
 A standalone demo script is included to showcase the agent's capabilities:
 ```bash
-python demo_launcher.py
+python [demo_launcher.py](file:///home/xbill/gemma4-tips/local-devops-agent/demo_launcher.py)
 ```

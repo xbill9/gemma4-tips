@@ -8,7 +8,6 @@ import time
 from typing import Optional
 
 import httpx
-from google.cloud import secretmanager
 from mcp.server.fastmcp import FastMCP
 from openai import AsyncOpenAI
 
@@ -19,34 +18,24 @@ logging.basicConfig(
 logger = logging.getLogger("vllm-devops-agent")
 
 # Initialize FastMCP server
-mcp = FastMCP("Queued TPU vLLM Agent (Gemma 4)")
+mcp = FastMCP("Local Gemma 4 SRE Agent")
 
 # --- Configuration ---
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "aisprint-491218")
-ZONE = os.getenv("GOOGLE_CLOUD_ZONE", "southamerica-east1-c")
-REGION = os.getenv("GOOGLE_CLOUD_REGION", "southamerica-east1")
 MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-E2B-it")
-HF_SECRET_ID = "hf-token"
-ACCELERATOR_TYPE = os.getenv("ACCELERATOR_TYPE", "v6e-8")
-TENSOR_PARALLEL_SIZE = int(os.getenv("TENSOR_PARALLEL_SIZE", "4"))
-
-# Local Model Deployment Config
-LOCAL_DEPLOYMENT = os.getenv("LOCAL_DEPLOYMENT", "true").lower() in ("true", "1", "yes")
 LOCAL_DOCKER_IMAGE = os.getenv("LOCAL_DOCKER_IMAGE", "ollama/ollama:latest")
 LOCAL_VLLM_PORT = int(os.getenv("LOCAL_VLLM_PORT", "8000"))
 
 
 def get_current_model_name() -> str:
-    """Returns the correct model identifier based on deployment mode."""
-    if LOCAL_DEPLOYMENT:
-        name_map = {
-            "google/gemma-4-E2B-it": "gemma4:e2b",
-            "google/gemma-4-E4B-it": "gemma4:e4b",
-            "google/gemma-4-26B-A4B-it": "gemma4:26b",
-            "google/gemma-4-31B-it": "gemma4:31b",
-        }
-        return name_map.get(MODEL_NAME, "gemma4:e2b")
-    return MODEL_NAME
+    """Returns the correct model identifier based on local mapping."""
+    name_map = {
+        "google/gemma-4-E2B-it": "gemma4:e2b",
+        "google/gemma-4-E4B-it": "gemma4:e4b",
+        "google/gemma-4-26B-A4B-it": "gemma4:26b",
+        "google/gemma-4-31B-it": "gemma4:31b",
+    }
+    return name_map.get(MODEL_NAME, "gemma4:e2b")
+
 
 # --- Helper Functions ---
 
@@ -71,139 +60,36 @@ async def run_command(cmd: list[str], timeout: int = 60) -> tuple[int, str, str]
         return -1, "", str(e)
 
 
-async def _get_node_id(resource_id: str) -> Optional[str]:
-    """Retrieves the node ID for a given Queued Resource."""
-    cmd = [
-        "gcloud",
-        "alpha",
-        "compute",
-        "tpus",
-        "queued-resources",
-        "describe",
-        resource_id,
-        f"--project={PROJECT_ID}",
-        f"--zone={ZONE}",
-        "--format=value(tpu.nodeSpec[0].nodeId)",
-    ]
-    rc, node_id, _ = await run_command(cmd)
-    return node_id.strip() if rc == 0 and node_id else None
-
-
-async def _get_node_ip(node_id: str) -> Optional[str]:
-    """Gets the external or internal IP of a TPU node."""
-    cmd = [
-        "gcloud",
-        "compute",
-        "tpus",
-        "tpu-vm",
-        "describe",
-        node_id,
-        f"--project={PROJECT_ID}",
-        f"--zone={ZONE}",
-        "--format=value(networkEndpoints[0].accessConfig.externalIp)",
-    ]
-    rc, ip, _ = await run_command(cmd)
-    if rc == 0 and ip:
-        return ip.strip()
-
-    # Fallback to internal IP if external is not found
-    cmd[-1] = "value(networkEndpoints[0].ipAddress)"
-    rc, ip, _ = await run_command(cmd)
-    return ip.strip() if rc == 0 and ip else None
-
-
-async def get_secret(secret_id: str = HF_SECRET_ID) -> Optional[str]:
-    """Retrieves a secret from Secret Manager or environment variables."""
-    # Always prioritize environment variables first, especially for local deployment
-    if secret_id == HF_SECRET_ID:
-        token = os.getenv("HF_TOKEN")
-        if token:
-            return token
-    try:
-        client = secretmanager.SecretManagerServiceClient()
-        name = f"projects/{PROJECT_ID}/secrets/{secret_id}/versions/latest"
-        response = await asyncio.to_thread(client.access_secret_version, request={"name": name})
-        return response.payload.data.decode("UTF-8")
-    except Exception as e:
-        logger.warning(
-            f"Failed to retrieve secret '{secret_id}' from GCP Secret Manager (Project: {PROJECT_ID}): {e}"
-        )
-        return None
-
-
-async def _get_formatted_startup_script(model_name: str, hf_token: str) -> str:
-    """Formats the startup script with necessary values."""
-    template_path = os.path.join(os.path.dirname(__file__), "startup_script_template.sh")
-    try:
-        with open(template_path, "r") as f:
-            template = f.read()
-        return template.format(
-            project_id=PROJECT_ID,
-            zone=ZONE,
-            model_name=model_name,
-            hf_token=hf_token,
-        )
-    except Exception as e:
-        logger.error(f"Error formatting startup script: {e}")
-        return f"""#!/bin/bash
-echo 'Error loading template: {e}'"""
-
-
-async def discover_vllm_url() -> Optional[str]:
-    """Finds the URL of an ACTIVE Queued Resource vLLM service, or returns localhost in local mode."""
-    if LOCAL_DEPLOYMENT:
-        return f"http://localhost:{LOCAL_VLLM_PORT}"
-
-    list_cmd = [
-        "gcloud",
-        "alpha",
-        "compute",
-        "tpus",
-        "queued-resources",
-        "list",
-        f"--project={PROJECT_ID}",
-        f"--zone={ZONE}",
-        "--format=json",
-    ]
-    rc, stdout, _ = await run_command(list_cmd)
-    if rc != 0 or not stdout:
-        return None
-
-    try:
-        resources = json.loads(stdout)
-        for res in resources:
-            if res.get("state", {}).get("state") == "ACTIVE":
-                resource_id = res.get("name", "").split("/")[-1]
-                node_id = await _get_node_id(resource_id)
-                if node_id:
-                    ip = await _get_node_ip(node_id)
-                    if ip:
-                        url = f"http://{ip}:8000"
-                        logger.info(f"📡 Found ACTIVE Queued Resource {resource_id} at {url}")
-                        return url
-    except Exception as e:
-        logger.error(f"Discovery error: {e}")
-    return None
+VLLM_URL = f"http://localhost:{LOCAL_VLLM_PORT}"
 
 
 async def get_vllm_client() -> AsyncOpenAI:
-    """Initializes and returns an AsyncOpenAI client for the vLLM service."""
-    url = await discover_vllm_url()
-    if not url:
-        raise Exception(f"No ACTIVE Queued Resource found in {ZONE}.")
-    return AsyncOpenAI(base_url=f"{url}/v1", api_key="not-needed")
+    """Initializes and returns an AsyncOpenAI client for the local vLLM service."""
+    return AsyncOpenAI(base_url=f"{VLLM_URL}/v1", api_key="not-needed")
+
+
+async def check_service_health(client: httpx.AsyncClient) -> tuple[bool, str]:
+    """Helper to check local endpoint health status."""
+    for path, name in [("health", "health"), ("v1/models", "v1/models")]:
+        try:
+            res = await client.get(f"{VLLM_URL}/{path}", timeout=2)
+            if res.status_code == 200:
+                return True, name
+        except Exception:
+            pass
+    return False, ""
 
 
 @mcp.tool()
 async def verify_model_health() -> str:
-    """Runs a deep logic check with latency reporting."""
+    """Runs a deep health check with latency reporting on the local model."""
     try:
         client = await get_vllm_client()
         start_time = time.monotonic()
         chat_completion = await client.chat.completions.create(
             messages=[{"role": "user", "content": "Hello, is the model working?"}],
             model=get_current_model_name(),
-            max_tokens=10,
+            max_tokens=200,
         )
         end_time = time.monotonic()
         latency = end_time - start_time
@@ -211,8 +97,8 @@ async def verify_model_health() -> str:
 
         if response_content:
             return (
-                f"✅ Model health check PASSED.\\n"
-                f"Response: '{response_content[:50]}...\\n'"
+                f"✅ Model health check PASSED.\n"
+                f"Response: '{response_content[:50]}...'\n"
                 f"Latency: {latency:.2f} seconds."
             )
         else:
@@ -223,477 +109,102 @@ async def verify_model_health() -> str:
 
 @mcp.tool()
 async def save_hf_token(token: str) -> str:
-    """Securely saves a Hugging Face API token to GCP Secret Manager or local environment."""
+    """Securely saves a Hugging Face API token locally."""
     os.environ["HF_TOKEN"] = token
-
-    if LOCAL_DEPLOYMENT:
-        try:
-            hf_cache_token_path = os.path.expanduser("~/.cache/huggingface/token")
-            os.makedirs(os.path.dirname(hf_cache_token_path), exist_ok=True)
-            with open(hf_cache_token_path, "w") as f:
-                f.write(token)
-            return "✅ Token saved locally to environment and ~/.cache/huggingface/token"
-        except Exception as e:
-            return f"✅ Token saved locally to environment (failed to write to file: {e})"
-
     try:
-        client = secretmanager.SecretManagerServiceClient()
-        secret_parent = f"projects/{PROJECT_ID}/secrets/{HF_SECRET_ID}"
-
-        try:
-            # Check if the secret already exists
-            await asyncio.to_thread(client.get_secret, request={"name": secret_parent})
-        except Exception:
-            # If not, create it
-            await asyncio.to_thread(
-                client.create_secret,
-                request={
-                    "parent": f"projects/{PROJECT_ID}",
-                    "secret_id": HF_SECRET_ID,
-                    "secret": {"replication": {"automatic": {}}},
-                },
-            )
-
-        # Add the new version
-        response = await asyncio.to_thread(
-            client.add_secret_version,
-            request={"parent": secret_parent, "payload": {"data": token.encode("UTF-8")}},
-        )
-        return f"✅ Token saved. Version: {response.name}"
+        hf_cache_token_path = os.path.expanduser("~/.cache/huggingface/token")
+        os.makedirs(os.path.dirname(hf_cache_token_path), exist_ok=True)
+        with open(hf_cache_token_path, "w") as f:
+            f.write(token)
+        return "✅ Token saved locally to environment and ~/.cache/huggingface/token"
     except Exception as e:
-        logger.error(f"Failed to save to GCP Secret Manager: {e}")
-        return f"⚠️ Saved to environment, but GCP Secret Manager failed: {e}"
-
-
-# --- MCP Tools ---
+        return f"✅ Token saved locally to environment (failed to write to file: {e})"
 
 
 @mcp.tool()
-async def destroy_queued_resource(resource_id: str) -> str:
-    """Safely deletes a Queued Resource and its node (or stops/removes local container in local deployment mode)."""
-    if LOCAL_DEPLOYMENT:
-        logger.info("Local deployment mode: Stopping and removing local container vllm-gemma4")
-        stop_rc, stop_out, stop_err = await run_command(["docker", "stop", "vllm-gemma4"])
-        rm_rc, rm_out, rm_err = await run_command(["docker", "rm", "-f", "vllm-gemma4"])
-        if rm_rc != 0:
-            return f"❌ Failed to delete/remove local container vllm-gemma4: {rm_err or rm_out}"
-        return "🗑️ Local container vllm-gemma4 stopped and removed successfully."
-
-    cmd = [
-        "gcloud",
-        "alpha",
-        "compute",
-        "tpus",
-        "queued-resources",
-        "delete",
-        resource_id,
-        f"--zone={ZONE}",
-        f"--project={PROJECT_ID}",
-        "--async",
-        "--quiet",
-    ]
-    rc, stdout, stderr = await run_command(cmd)
-    if rc != 0:
-        return f"❌ Failed to delete resource {resource_id}: {stderr}"
-    return f"🗑️ Deletion of {resource_id} initiated: {stdout}"
-
-
-@mcp.tool()
-async def manage_queued_resource(resource_id: str = "vllm-gemma4-qr") -> str:
-    """Ensures the primary inference server is running. In local deployment, boots local Docker."""
-    if LOCAL_DEPLOYMENT:
-        logger.info("Local deployment mode: Ensuring local Docker container vllm-gemma4 is running.")
-        res = await manage_vllm_docker(resource_id=resource_id, action="start")
-        return f"✅ Local deployment managed: {res}"
-
-    list_cmd = [
-        "gcloud",
-        "alpha",
-        "compute",
-        "tpus",
-        "queued-resources",
-        "list",
-        f"--zone={ZONE}",
-        f"--project={PROJECT_ID}",
-        "--format=json",
-    ]
-    rc, stdout, stderr = await run_command(list_cmd)
-    if rc != 0:
-        return f"❌ Failed to list resources: {stderr}"
-
-    try:
-        resources = json.loads(stdout)
-    except Exception:
-        resources = []
-
-    redundant_deleted = []
-    primary_res = None
-
-    for res in resources:
-        name = res.get("name", "").split("/")[-1]
-        state = res.get("state", {}).get("state", "UNKNOWN")
-
-        if name == resource_id:
-            if state in ["FAILED", "SUSPENDED"]:
-                logger.info(f"Primary resource {name} is {state}. Deleting to recreate.")
-                await destroy_queued_resource(name)
-                redundant_deleted.append(f"{name} (Failed)")
-            else:
-                primary_res = res
-        else:
-            logger.info(f"Deleting redundant resource: {name}")
-            await destroy_queued_resource(name)
-            redundant_deleted.append(name)
-
-    if not primary_res:
-        token = await get_secret()
-        if not token:
-            return "❌ Aborted: 'hf-token' secret missing."
-
-        startup_script_content = await _get_formatted_startup_script(MODEL_NAME, token)
-        script_file = "temp_startup_script.sh"
-        with open(script_file, "w") as f:
-            f.write(startup_script_content)
-
-        create_cmd = [
-            "gcloud",
-            "alpha",
-            "compute",
-            "tpus",
-            "queued-resources",
-            "create",
-            resource_id,
-            f"--zone={ZONE}",
-            "--runtime-version=v2-alpha-tpuv6e",
-            f"--node-id={resource_id}-node",
-            "--provisioning-model=flex-start",
-            "--max-run-duration=4h",
-            "--valid-until-duration=4h",
-            f"--project={PROJECT_ID}",
-            "--labels=purpose=flex-start",
-            f"--accelerator-type={ACCELERATOR_TYPE}",
-            f"--metadata-from-file=startup-script={script_file}",
-        ]
-
-        logger.info(f"Executing gcloud command: {' '.join(shlex.quote(c) for c in create_cmd)}")
-        rc_c, _, err_c = await run_command(create_cmd)
-
-        if rc_c != 0:
-            return f"❌ Creation failed: {err_c}. Cleaned up: {redundant_deleted}"
-        return (
-            f"🚀 Primary resource {resource_id} creation initiated with startup script. Cleaned up: {redundant_deleted}"
-        )
-
-    state = primary_res.get("state", {}).get("state", "UNKNOWN")
-    return f"✅ Primary resource {resource_id} is {state}. Cleaned up: {redundant_deleted}"
-
-
-@mcp.tool()
-async def manage_vllm_docker(resource_id: str = "vllm-gemma4-qr", action: str = "start") -> str:
-    """Manages the vLLM Docker container locally or on the TPU VM."""
-    hf_token = await get_secret() or "none"
-
-    if LOCAL_DEPLOYMENT:
-        logger.info(f"Local deployment mode: Managing Docker with action '{action}'")
-        ollama_model = get_current_model_name()
-        docker_run_cmd = os.getenv(
-            "LOCAL_DOCKER_RUN_CMD",
-            f"docker run --name vllm-gemma4 -d -p {LOCAL_VLLM_PORT}:11434 "
-            f"-v ollama_local_volume:/root/.ollama {LOCAL_DOCKER_IMAGE}",
-        )
-        commands = {
-            "start": f"(docker start vllm-gemma4 || {docker_run_cmd}) && sleep 2 && docker exec -d vllm-gemma4 ollama pull {ollama_model}",
-            "stop": "docker stop vllm-gemma4",
-            "restart": "docker restart vllm-gemma4",
-            "status": "docker ps -a --filter name=vllm-gemma4",
-            "log": "docker logs --tail 100 vllm-gemma4",
-            "rm": "docker rm -f vllm-gemma4",
-        }
-        cmd_str = commands.get(action, commands["status"])
-        process = await asyncio.create_subprocess_shell(
-            cmd_str,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
-            rc = process.returncode or 0
-            if rc != 0:
-                return f"❌ Local Docker {action} failed: {stderr.decode().strip() or stdout.decode().strip()}"
-            return f"✅ Local Docker {action} command executed:\n{stdout.decode().strip()}"
-        except Exception as e:
-            return f"❌ Local Docker {action} execution error: {e}"
-
-    node_id = await _get_node_id(resource_id)
-    if not node_id:
-        return f"❌ Could not find node for resource {resource_id}. Ensure it is ACTIVE."
-
-    docker_image = "vllm/vllm-tpu:nightly"
-    docker_run_cmd = (
-        f"sudo docker run --name vllm-gemma4 --privileged --net=host -d "
-        f"-v /dev/shm:/dev/shm --shm-size 10gb "
-        f"-e HF_HOME=/dev/shm -e HF_TOKEN=$(gcloud secrets versions access latest --secret=hf-token) "
-        f"{docker_image} vllm serve {MODEL_NAME} "
-        f"--tensor-parallel-size 4 --disable_chunked_mm_input --max_model_len=65536 "
-        f"--max-num_batched_tokens 4096 --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 "
-        f'--limit-mm-per-prompt \'{{"image":0,"audio":0}}\''
+async def manage_docker(action: str = "status") -> str:
+    """Manages the local vLLM/Ollama Docker container (actions: start, stop, restart, status, log, rm)."""
+    logger.info(f"Local deployment mode: Managing Docker with action '{action}'")
+    ollama_model = get_current_model_name()
+    docker_run_cmd = os.getenv(
+        "LOCAL_DOCKER_RUN_CMD",
+        f"docker run --name vllm-gemma4 -d -p {LOCAL_VLLM_PORT}:11434 "
+        f"-e OLLAMA_KV_CACHE_TYPE=q4_0 -e OLLAMA_NUM_PARALLEL=1 "
+        f"-v ollama_local_volume:/root/.ollama {LOCAL_DOCKER_IMAGE}",
     )
-
     commands = {
-        "start": f"sudo docker start vllm-gemma4 || {docker_run_cmd}",
-        "stop": "sudo docker stop vllm-gemma4",
-        "restart": "sudo docker restart vllm-gemma4",
-        "status": "sudo docker ps -a --filter name=vllm-gemma4",
-        "log": "sudo docker logs --tail 100 vllm-gemma4",
-        "rm": "sudo docker rm -f vllm-gemma4",
+        "start": f"(docker start vllm-gemma4 || {docker_run_cmd}) && sleep 2 && docker exec -d vllm-gemma4 ollama pull {ollama_model}",
+        "stop": "docker stop vllm-gemma4",
+        "restart": "docker restart vllm-gemma4",
+        "status": "docker ps -a --filter name=vllm-gemma4",
+        "log": "docker logs --tail 100 vllm-gemma4",
+        "rm": "docker rm -f vllm-gemma4",
     }
-
-    ssh_cmd = [
-        "gcloud",
-        "compute",
-        "tpus",
-        "tpu-vm",
-        "ssh",
-        node_id,
-        f"--zone={ZONE}",
-        f"--project={PROJECT_ID}",
-        "--command",
-        commands.get(action, commands["status"]),
-    ]
-
-    rc, out, err = await run_command(ssh_cmd)
-    if rc != 0:
-        return f"""⚠️ Docker {action} failed, but reservation {resource_id} remains safe.
-Error: {err}"""
-    return f"""✅ Docker {action} command executed on {node_id}.
-{out}"""
-
-
-@mcp.tool()
-async def get_vllm_deployment_config(
-    service_name: str = "vllm-gemma4-qr",
-    model_name: str = MODEL_NAME,
-) -> str:
-    """Generates the gcloud command and Docker run commands for a TPU v6e vLLM deployment."""
-    hf_token = await get_secret() or "YOUR_HF_TOKEN"
-
-    gcloud_cmd = (
-        f"gcloud alpha compute tpus tpu-vm create {service_name} \\\n"
-        f"    --accelerator-type={ACCELERATOR_TYPE} \\\n"
-        f"    --version=v2-alpha-tpuv6e \\\n"
-        f"    --project={PROJECT_ID} \\\n"
-        f"    --zone={ZONE}"
+    cmd_str = commands.get(action, commands["status"])
+    process = await asyncio.create_subprocess_shell(
+        cmd_str,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-
-    docker_cmd = (
-        f"sudo docker run -t --rm --name vllm-gemma4 --privileged --net=host \\\n"
-        f"    -v /dev/shm:/dev/shm --shm-size 10gb \\\n"
-        f"    -e HF_TOKEN={hf_token} \\\n"
-        f"    vllm/vllm-tpu:nightly \\\n"
-        f"    vllm serve {model_name} \\\n"
-        f"    --max-model-len 16384 \\\n"
-        f"    --tensor-parallel-size {TENSOR_PARALLEL_SIZE} \\\n"
-        f"    --disable_chunked_mm_input \\\n"
-        f"    --enable-auto-tool-choice \\\n"
-        f"    --tool-call-parser gemma4 \\\n"
-        f"    --reasoning-parser gemma4"
-    )
-
-    return (
-        f"### 🚀 TPU vLLM Deployment Configuration\n\n"
-        f"#### 1. Provision TPU VM\n"
-        f"```bash\n{gcloud_cmd}\n```\n\n"
-        f"#### 2. Run vLLM Container on TPU VM\n"
-        f"```bash\n{docker_cmd}\n```"
-    )
-
-
-@mcp.tool()
-async def list_queued_resources(zone: str = ZONE) -> str:
-    """Lists all Queued Resources in a specific zone."""
-    if LOCAL_DEPLOYMENT:
-        return "ℹ️ Local deployment mode active. Queued Resources are not used locally."
-
-    cmd = [
-        "gcloud",
-        "alpha",
-        "compute",
-        "tpus",
-        "queued-resources",
-        "list",
-        f"--zone={zone}",
-        f"--project={PROJECT_ID}",
-        "--format=table(name, state.state, node_id, accelerator_type, create_time)",
-    ]
-    rc, out, err = await run_command(cmd)
-    if rc == 0:
-        return f"""### 📋 Queued Resources in {zone}
-```
-{out}
-```"""
-    else:
-        return f"❌ List failed: {err}"
-
-
-@mcp.tool()
-async def describe_queued_resource(resource_id: str = "vllm-gemma4-qr", zone: str = ZONE) -> str:
-    """Provides detailed information about a specific Queued Resource."""
-    if LOCAL_DEPLOYMENT:
-        return f"ℹ️ Local deployment mode active. Queued resource '{resource_id}' is simulated/not applicable."
-
-    cmd = [
-        "gcloud",
-        "alpha",
-        "compute",
-        "tpus",
-        "queued-resources",
-        "describe",
-        resource_id,
-        f"--zone={zone}",
-        f"--project={PROJECT_ID}",
-        "--format=json",
-    ]
-    rc, out, err = await run_command(cmd)
-    if rc != 0:
-        return f"❌ Describe failed: {err}"
     try:
-        data = json.loads(out)
-        state = data.get("state", {}).get("state", "UNKNOWN")
-        node_id = data.get("tpu", {}).get("nodeSpec", [{}])[0].get("nodeId", "N/A")
-        return (
-            f"### 🔍 Detail: {resource_id}\n"
-            f"- **State:** `{state}`\n"
-            f"- **Node ID:** `{node_id}`\n"
-            f"- **Full Data:**\n```json\n{json.dumps(data, indent=2)}\n```"
-        )
-    except Exception:
-        return f"""### 🔍 Detail: {resource_id}
-```
-{out}
-```"""
-
-
-@mcp.tool()
-async def get_reservation_status(resource_id: str = "vllm-gemma4-qr") -> str:
-    """Checks the lifecycle state and expiry time of a Queued Resource."""
-    return await describe_queued_resource(resource_id)
-
-
-@mcp.tool()
-async def check_tpu_availability(resource_id: str) -> str:
-    """Simple check to see if a Queued Resource has reached ACTIVE state."""
-    if LOCAL_DEPLOYMENT:
-        return f"### 🧊 TPU Availability: {resource_id}\n- **State:** `ACTIVE` (Simulated in local mode)\n- **Available:** ✅ Yes"
-
-    cmd = [
-        "gcloud",
-        "alpha",
-        "compute",
-        "tpus",
-        "queued-resources",
-        "describe",
-        resource_id,
-        f"--zone={ZONE}",
-        f"--project={PROJECT_ID}",
-        "--format=value(state.state)",
-    ]
-    rc, state, err = await run_command(cmd)
-    if rc != 0:
-        return f"❌ Check failed: {err}"
-    is_active = state.strip() == "ACTIVE"
-    return (
-        f"### 🧊 TPU Availability: {resource_id}\n"
-        f"- **State:** `{state.strip()}`\n"
-        f"- **Available:** {'✅ Yes' if is_active else '⏳ No'}"
-    )
-
-
-@mcp.tool()
-async def estimate_deployment_cost(
-    hours: float = 1.0, tpu_type: str = "v6e", topology: str = "2x4", is_flex: bool = True
-) -> str:
-    """Estimates the cost of a TPU deployment."""
-    rates = {"v6e": 1.35, "v5e": 0.12, "v5p": 0.60}  # Flex-start rates
-    rate = rates.get(tpu_type, rates["v6e"]) * (1 if is_flex else 2)
-
-    try:
-        chips = eval(topology.replace("x", "*"))
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+        rc = process.returncode or 0
+        if rc != 0:
+            return f"❌ Local Docker {action} failed: {stderr.decode().strip() or stdout.decode().strip()}"
+        return f"✅ Local Docker {action} command executed:\n{stdout.decode().strip()}"
     except Exception as e:
-        logger.warning(f"Failed to parse topology string '{topology}': {e}. Using default chips=8.")
-        chips = 8
-
-    total_cost = chips * rate * hours
-    return (
-        f"### 💸 Estimated Cost: `${total_cost:.2f}` for `{hours}h` on `{chips}` chip `{tpu_type}` "
-        f"({'Flex-start' if is_flex else 'On-demand'})."
-    )
+        return f"❌ Local Docker {action} execution error: {e}"
 
 
 @mcp.tool()
 async def get_system_status() -> str:
-    """Provides a high-level dashboard of system status."""
-    resources_str = await list_queued_resources()
+    """Provides a high-level dashboard of local system status."""
     health = "🔴 Offline"
-    url = await discover_vllm_url()
-    if url:
-        try:
-            async with httpx.AsyncClient() as client:
-                res = await client.get(f"{url}/health", timeout=2)
-                if res.status_code == 200:
-                    health = f"🟢 Online ({url})"
-        except Exception:
-            pass
+    async with httpx.AsyncClient() as client:
+        is_up, _ = await check_service_health(client)
+        if is_up:
+            health = f"🟢 Online ({VLLM_URL})"
 
-    if LOCAL_DEPLOYMENT:
-        if "🟢" in health:
-            next_step = "Use `query_queued_gemma4` to interact with the model."
-        else:
-            next_step = "Call `manage_queued_resource` (or `manage_vllm_docker` with action='start') to start the local Docker container."
+    docker_status = "🔴 Unknown (Container check failed)"
+    try:
+        rc, out, _ = await run_command(
+            ["docker", "ps", "-a", "--filter", "name=vllm-gemma4", "--format", "{{.Status}}"]
+        )
+        if rc == 0 and out:
+            docker_status = f"🟢 Running ({out})" if "Up" in out else f"🔴 Stopped ({out})"
+        elif rc == 0:
+            docker_status = "🔴 Not Created (Container 'vllm-gemma4' does not exist)"
+    except Exception as e:
+        docker_status = f"🔴 Error checking container: {e}"
+
+    if "🟢" in health:
+        next_step = "Use `query_gemma4` to interact with the model."
     else:
-        next_step = "Call `manage_queued_resource` to provision infrastructure."
-        if "ACTIVE" in resources_str:
-            next_step = (
-                "Use `query_queued_gemma4` to interact with the model."
-                if "🟢" in health
-                else "Call `manage_vllm_docker` with action='start' to start the service on the TPU VM."
-            )
+        next_step = "Call `manage_docker` with action='start' to start the local Docker container."
 
-    return f"### 🌀 System Status ({ZONE})\n- **vLLM Health:** {health}\n{resources_str}\n**👉 Next Step:** {next_step}"
-
-
-@mcp.tool()
-async def get_vllm_endpoint() -> str:
-    """Returns the active vLLM service URL if available."""
-    url = await discover_vllm_url()
-    if url:
-        try:
-            async with httpx.AsyncClient() as client:
-                res = await client.get(f"{url}/health", timeout=2)
-                if res.status_code == 200:
-                    prefix = "Local " if LOCAL_DEPLOYMENT else ""
-                    return f"🟢 {prefix}vLLM is Online at: {url}"
-        except Exception:
-            pass
-        if LOCAL_DEPLOYMENT:
-            return f"🔴 Local vLLM endpoint configured at {url} but is Unreachable. Start it with `manage_queued_resource`."
-        else:
-            return f"⚠️ TPU node is ACTIVE at {url}, but vLLM service is Unreachable/Offline."
-    if LOCAL_DEPLOYMENT:
-        return "❌ Local deployment mode active but no URL configured."
-    return "❌ No ACTIVE Queued Resource with a reachable vLLM service found."
+    return (
+        f"### 🌀 Local System Status\n"
+        f"- **vLLM Health:** {health}\n"
+        f"- **Docker Container Status:** {docker_status}\n"
+        f"**👉 Next Step:** {next_step}"
+    )
 
 
 @mcp.tool()
-async def get_deployed_endpoint() -> str:
-    """Returns the raw URL of the active vLLM service."""
-    url = await discover_vllm_url()
-    return url if url else "None"
+async def get_endpoint() -> str:
+    """Returns the active local vLLM service URL if available."""
+    async with httpx.AsyncClient() as client:
+        is_up, endpoint_type = await check_service_health(client)
+        if is_up:
+            label = "vLLM/Ollama" if endpoint_type == "v1/models" else "vLLM"
+            return f"🟢 Local {label} is Online at: {VLLM_URL}"
+        return f"🔴 Local vLLM endpoint configured at {VLLM_URL} but is Unreachable. Start it with `manage_docker`."
 
 
 @mcp.tool()
-async def query_queued_gemma4(prompt: str) -> str:
-    """Queries the self-hosted Gemma 4 model on the active Queued Resource."""
-    logger.info(f"Querying model with prompt: '{prompt[:50]}...'")
+async def query_gemma4(prompt: str) -> str:
+    """Queries the self-hosted local Gemma 4 model."""
+    logger.info(f"Querying local model with prompt: '{prompt[:50]}...'")
     try:
         client = await get_vllm_client()
         chat_completion = await client.chat.completions.create(
@@ -709,9 +220,9 @@ async def query_queued_gemma4(prompt: str) -> str:
 
 
 @mcp.tool()
-async def query_queued_gemma4_with_stats(prompt: str) -> str:
+async def query_gemma4_with_stats(prompt: str) -> str:
     """
-    Queries the self-hosted Gemma 4 model and returns detailed performance statistics.
+    Queries the self-hosted local Gemma 4 model and returns detailed performance statistics.
 
     This tool provides:
     - The full model response.
@@ -771,16 +282,40 @@ async def query_queued_gemma4_with_stats(prompt: str) -> str:
 
 @mcp.tool()
 async def run_vllm_benchmark(
-    resource_id: str = "vllm-gemma4-qr",
     backend: str = "vllm",
-    model: str = "google/gemma-4-31B-it",
+    model: str = "google/gemma-4-E2B-it",
     dataset_name: str = "random",
     num_prompts: int = 100,
     random_input_len: int = 1024,
     random_output_len: int = 128,
     max_concurrency: Optional[int] = None,
 ) -> str:
-    """Runs vLLM's internal benchmark tool inside the container on the TPU VM (or locally in local mode)."""
+    """Runs vLLM's internal benchmark tool inside the local container or falls back to the local benchmarking suite if Ollama is running."""
+    if "ollama" in LOCAL_DOCKER_IMAGE.lower():
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        suite_path = os.path.join(current_dir, "benchmarking_suite.py")
+        if not os.path.exists(suite_path):
+            return "❌ Local benchmark failed: benchmarking_suite.py not found."
+
+        cmd = [
+            sys.executable,
+            suite_path,
+            "--url",
+            VLLM_URL,
+            "--model",
+            get_current_model_name(),
+            "--requests",
+            str(num_prompts),
+            "--tokens",
+            str(random_output_len),
+            "--output",
+            os.path.join(current_dir, "benchmark_results.csv"),
+        ]
+        rc, out, err = await run_command(cmd, timeout=600)
+        if rc != 0:
+            return f"⚠️ Local benchmark failed.\nError: {err}\nOutput: {out}"
+        return f"✅ Local benchmark completed:\n{out}"
+
     benchmark_cmd = (
         "vllm bench serve "
         f"--backend {backend} "
@@ -793,182 +328,52 @@ async def run_vllm_benchmark(
     if max_concurrency:
         benchmark_cmd += f" --max-concurrency {max_concurrency}"
 
-    if LOCAL_DEPLOYMENT:
-        docker_cmd = (
-            f"docker run --rm -v /dev/shm:/dev/shm --shm-size 10gb "
-            f"-e HF_TOKEN=$(docker exec vllm-gemma4 env | grep HF_TOKEN | cut -d= -f2 || echo '') "
-            f"{LOCAL_DOCKER_IMAGE} {benchmark_cmd}"
-        )
-        process = await asyncio.create_subprocess_shell(
-            docker_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=600)
-            rc = process.returncode or 0
-            if rc != 0:
-                return f"⚠️ Local benchmark failed.\nError: {stderr.decode()}\nOutput: {stdout.decode()}"
-            return f"✅ Local benchmark completed:\n{stdout.decode()}"
-        except Exception as e:
-            return f"❌ Local benchmark execution error: {e}"
-
-    node_id = await _get_node_id(resource_id)
-    if not node_id:
-        return f"❌ Could not find node for resource {resource_id}. Ensure it is ACTIVE."
-
-    # We run the benchmark in a new container to not interfere with the serving container
     docker_cmd = (
-        "sudo docker run --rm --privileged --net=host "
-        "-v /dev/shm:/dev/shm --shm-size 10gb "
-        "-e HF_TOKEN=$(gcloud secrets versions access latest --secret=hf-token) "
-        f"vllm/vllm-tpu:nightly {benchmark_cmd}"
+        f"docker run --rm -v /dev/shm:/dev/shm --shm-size 10gb "
+        f"-e HF_TOKEN=$(docker exec vllm-gemma4 env | grep HF_TOKEN | cut -d= -f2 || echo '') "
+        f"{LOCAL_DOCKER_IMAGE} {benchmark_cmd}"
     )
-
-    ssh_cmd = [
-        "gcloud",
-        "compute",
-        "tpus",
-        "tpu-vm",
-        "ssh",
-        node_id,
-        f"--zone={ZONE}",
-        f"--project={PROJECT_ID}",
-        "--command",
+    process = await asyncio.create_subprocess_shell(
         docker_cmd,
-    ]
-
-    rc, out, err = await run_command(ssh_cmd, timeout=600)  # Increased timeout for benchmark
-    if rc != 0:
-        return f"""⚠️ Benchmark failed on {node_id}.
-Error: {err}
-Output: {out}"""
-    return f"""✅ Benchmark completed on {node_id}:
-{out}"""
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=600)
+        rc = process.returncode or 0
+        if rc != 0:
+            return f"⚠️ Local benchmark failed.\nError: {stderr.decode()}\nOutput: {stdout.decode()}"
+        return f"✅ Local benchmark completed:\n{stdout.decode()}"
+    except Exception as e:
+        return f"❌ Local benchmark execution error: {e}"
 
 
 @mcp.tool()
-async def get_vllm_docker_logs(resource_id: str = "vllm-gemma4-qr", tail: Optional[int] = None) -> str:
-    """Retrieves logs from the vLLM Docker container locally or on the TPU VM."""
-    if LOCAL_DEPLOYMENT:
-        log_cmd = "docker logs vllm-gemma4"
-        if tail:
-            log_cmd += f" --tail {tail}"
-        rc, out, err = await run_command(shlex.split(log_cmd))
-        if rc != 0:
-            return f"⚠️ Failed to get local Docker logs.\nError: {err}"
-        return f"✅ Local Docker logs:\n{out}"
-
-    node_id = await _get_node_id(resource_id)
-    if not node_id:
-        return f"❌ Could not find node for resource {resource_id}. Ensure it is ACTIVE."
-
-    log_cmd = "sudo docker logs vllm-gemma4"
+async def get_docker_logs(tail: Optional[int] = None) -> str:
+    """Retrieves logs from the local vLLM/Ollama Docker container."""
+    log_cmd = "docker logs vllm-gemma4"
     if tail:
         log_cmd += f" --tail {tail}"
-
-    ssh_cmd = [
-        "gcloud",
-        "compute",
-        "tpus",
-        "tpu-vm",
-        "ssh",
-        node_id,
-        f"--zone={ZONE}",
-        f"--project={PROJECT_ID}",
-        "--command",
-        log_cmd,
-    ]
-
-    rc, out, err = await run_command(ssh_cmd)
+    rc, out, err = await run_command(shlex.split(log_cmd))
     if rc != 0:
-        return f"""⚠️ Failed to get Docker logs from {node_id}.
-Error: {err}"""
-    return f"""✅ Docker logs from {node_id}:
-{out}"""
+        return f"⚠️ Failed to get local Docker logs.\nError: {err}"
+    return f"✅ Local Docker logs:\n{out}"
 
 
 @mcp.tool()
-async def get_tpu_system_logs(
-    resource_id: str = "vllm-gemma4-qr", service: str = "docker", tail: Optional[int] = None
-) -> str:
-    """Retrieves systemd logs for a specific service locally or from the TPU VM."""
-    if LOCAL_DEPLOYMENT:
-        log_cmd = f"journalctl -u {service} -n {tail or 100}"
-        rc, out, err = await run_command(shlex.split(log_cmd))
-        if rc != 0:
-            return f"ℹ️ Local deployment mode. journalctl failed: {err}. Try docker logs directly."
-        return f"✅ Local system logs for {service}:\n{out}"
-
-    node_id = await _get_node_id(resource_id)
-    if not node_id:
-        return f"❌ Could not find node for resource {resource_id}. Ensure it is ACTIVE."
-
-    log_cmd = f"journalctl -u {service} -n {tail or 100}"
-
-    ssh_cmd = [
-        "gcloud",
-        "compute",
-        "tpus",
-        "tpu-vm",
-        "ssh",
-        node_id,
-        f"--zone={ZONE}",
-        f"--project={PROJECT_ID}",
-        "--command",
-        log_cmd,
-    ]
-
-    rc, out, err = await run_command(ssh_cmd)
-    if rc != 0:
-        return f"""⚠️ Failed to get system logs from {node_id}.
-Error: {err}"""
-    return f"""✅ System logs for '{service}' from {node_id}:
-{out}"""
-
-
-@mcp.tool()
-async def get_cloud_logging_logs(log_filter: str = 'resource.type="tpu_worker"', limit: int = 20) -> str:
-    """Fetches logs from Google Cloud Logging or local Docker logs in local mode."""
-    if LOCAL_DEPLOYMENT:
-        logger.info("Local deployment mode: redirecting Cloud Logging request to local Docker logs.")
-        logs_str = await get_vllm_docker_logs(tail=limit)
-        return f"### ☁️ Cloud Logs (Simulated from Local Docker Logs)\n\n{logs_str}"
-
-    cmd = ["gcloud", "logging", "read", log_filter, f"--project={PROJECT_ID}", f"--limit={limit}", "--format=json"]
-    rc, out, err = await run_command(cmd)
-    if rc != 0:
-        return f"❌ Failed to fetch Cloud Logs: {err}"
-
-    try:
-        logs = json.loads(out)
-        formatted_logs = "\n".join(
-            [
-                f"[{log_entry.get('timestamp')}] {log_entry.get('resource', {}).get('labels', {}).get('node_id', 'N/A')} - "
-                f"{log_entry.get('textPayload', log_entry.get('jsonPayload', {}))}"
-                for log_entry in logs
-            ]
-        )
-        return f"### ☁️ Cloud Logs (filter: `{log_filter}`)\n```\n{formatted_logs}\n```"
-    except Exception:
-        return f"### ☁️ Cloud Logs (raw)\n```\n{out}\n```"
-
-
-@mcp.tool()
-async def analyze_cloud_logging(minutes: int = 60) -> str:
-    """Fetches Cloud Logging logs from the last N minutes and uses Gemma 4 to analyze them for errors."""
-    log_filter = 'resource.type="tpu_worker" severity>=ERROR'
-    logs_result = await get_cloud_logging_logs(log_filter=log_filter, limit=15)
+async def analyze_local_logs(limit: int = 15) -> str:
+    """Fetches local Docker container logs and uses Gemma 4 to analyze them for errors."""
+    logs_result = await get_docker_logs(tail=limit)
 
     prompt = (
-        f"You are a TPU SRE expert. Analyze the following logs and summarize any errors, "
+        f"You are a DevOps and SRE expert. Analyze the following local vLLM/Ollama container logs and summarize any errors, "
         f"their potential root causes, and recommended remediation steps:\n\n"
         f"{logs_result}\n\n"
         f"Provide a concise summary."
     )
 
     try:
-        analysis = await query_queued_gemma4(prompt)
+        analysis = await query_gemma4(prompt)
         return analysis
     except Exception as e:
         return f"❌ Analysis failed because model is unreachable: {e}"
@@ -976,83 +381,94 @@ async def analyze_cloud_logging(minutes: int = 60) -> str:
 
 @mcp.tool()
 async def get_model_details() -> str:
-    """
-    Retrieves detailed information about the running model, vLLM engine, and versions.
-
-    Provides a verbose report including:
-    - Model ID and details from the vLLM engine.
-    - vLLM version and build information.
-    - Health status.
-    - Key performance metrics.
-    """
-    url = await discover_vllm_url()
-    if not url:
-        return "❌ No ACTIVE Queued Resource with a reachable vLLM service found."
-
-    report = f"### 🧩 Model & vLLM Engine Details ({url})\n\n"
+    """Retrieves detailed information about the running local model, engine, and versions."""
+    report = f"### 🧩 Model Details ({VLLM_URL})\n\n"
 
     async with httpx.AsyncClient(timeout=10) as client:
         # 1. Get Model Details from /v1/models
         try:
-            models_res = await client.get(f"{url}/v1/models")
+            models_res = await client.get(f"{VLLM_URL}/v1/models")
             if models_res.status_code == 200:
                 models_data = models_res.json()
                 report += "**Model Information (`/v1/models`):**\n"
                 report += f"```json\n{json.dumps(models_data, indent=2)}\n```\n"
             else:
-                report += f"⚠️ Could not fetch model details. Status: {models_res.status_code}\n"
+                report += f"⚠️ Could not fetch model details. Status: {models_res.status_code}\n\n"
         except Exception as e:
-            report += f"❌ Error fetching model details: {e}\n"
+            report += f"❌ Error fetching model details: {e}\n\n"
 
-        # 2. Get vLLM Version from /version
-        try:
-            version_res = await client.get(f"{url}/version")
-            if version_res.status_code == 200:
-                version_data = version_res.json()
-                report += "**vLLM Version (`/version`):**\n"
-                report += f"- Version: `{version_data.get('version', 'N/A')}`\n\n"
-            else:
-                report += f"⚠️ Could not fetch vLLM version. Status: {version_res.status_code}\n\n"
-        except Exception as e:
-            report += f"❌ Error fetching vLLM version: {e}\n\n"
-
-        # 3. Get Health Status from /health
-        try:
-            health_res = await client.get(f"{url}/health")
-            if health_res.status_code == 200:
-                report += "**Health Status (`/health`):**\n- Status: `Healthy` ✅\n\n"
-            else:
-                report += (
-                    f"**Health Status (`/health`):**\n- Status: `Unhealthy` ❌ (Code: {health_res.status_code})\n\n"
-                )
-        except Exception as e:
-            report += f"❌ Error fetching health status: {e}\n\n"
-
-        # 4. Get Metrics from /metrics
-        try:
-            metrics_res = await client.get(f"{url}/metrics")
-            if metrics_res.status_code == 200:
-                report += "**Key vLLM Metrics (`/metrics`):**\n"
-                metrics_lines = metrics_res.text.splitlines()
-                key_metrics = [
-                    line
-                    for line in metrics_lines
-                    if "vllm_requests_running" in line
-                    or "vllm_requests_swapped" in line
-                    or "vllm_requests_waiting" in line
-                    or "vllm_tpu_cache_usage_perc" in line
-                    or "process_resident_memory_bytes" in line
-                ]
-                if key_metrics:
-                    report += "```\n" + "\n".join(key_metrics) + "\n```\n"
-                else:
-                    report += "Metrics endpoint available, but no key metrics found in snippet.\n"
-            else:
-                report += "⚠️ Metrics endpoint not available or failed.\n"
-        except Exception as e:
-            report += f"❌ Error fetching metrics: {e}\n"
+        # 2. Get Health Status
+        is_up, endpoint_type = await check_service_health(client)
+        if is_up:
+            report += f"**Health Status (`/{endpoint_type}`):**\n- Status: `Healthy` ✅\n\n"
+        else:
+            report += "**Health Status:**\n- Status: `Unhealthy` ❌\n\n"
 
     return report
+
+
+@mcp.tool()
+async def get_help() -> str:
+    """Provides help text and summarizes the configuration options and all available SRE/DevOps tools for this local MCP server."""
+    return (
+        "### 🛠️ Local Gemma 4 SRE Agent Help & Configuration\n\n"
+        "You can configure this MCP server using the following environment variables:\n\n"
+        f"- **`MODEL_NAME`**: Hugging Face model ID for local Gemma 4 mapping.\n"
+        f"  - *Current Value:* `{MODEL_NAME}` (runs as `{get_current_model_name()}` locally)\n"
+        f"- **`LOCAL_DOCKER_IMAGE`**: Local Docker image name (e.g. `ollama/ollama:latest`).\n"
+        f"  - *Current Value:* `{LOCAL_DOCKER_IMAGE}`\n"
+        f"- **`LOCAL_VLLM_PORT`**: Port number for local vLLM/Ollama API server.\n"
+        f"  - *Current Value:* `{LOCAL_VLLM_PORT}`\n\n"
+        "### ℹ️ Active Mode Summary\n"
+        "The server is running in **LOCAL** mode.\n\n"
+        "---\n\n"
+        "### 🧰 Available MCP Tools\n\n"
+        "Below is a summary of the tools exposed by this SRE/DevOps agent:\n\n"
+        "#### 🐳 Deployment & Configuration\n"
+        "- **`manage_docker`**: Manages the local container (actions: `start`, `stop`, `restart`, `status`, `log`, `rm`).\n"
+        "- **`save_hf_token`**: Securely saves a Hugging Face API token locally in environment variables and cache.\n\n"
+        "#### 📊 Monitoring & Status\n"
+        "- **`get_system_status`**: Provides a high-level status dashboard of the local Docker container and vLLM service.\n"
+        "- **`get_endpoint`**: Verifies connectivity and returns the active local vLLM service URL.\n"
+        "- **`get_active_models`**: Gets the active resource usage (actively loaded models, sizes, CPU/GPU status, context size) via ollama ps.\n"
+        "- **`get_model_show_details`**: Gets deep model parameters, architecture, license, and config details via ollama show.\n"
+        "- **`get_help`**: Provides this help text and summarizes configuration/tools.\n\n"
+        "#### 📈 Performance & Benchmarking\n"
+        "- **`run_vllm_benchmark`**: Runs vLLM's internal serving benchmark tool inside the local container.\n"
+        "- **`get_docker_logs`**: Retrieves startup and execution logs from the local Docker container.\n"
+        "- **`analyze_local_logs`**: Fetches the local container logs and uses Gemma 4 to analyze them for SRE/DevOps errors.\n\n"
+        "#### 💬 Interaction & Diagnostics\n"
+        "- **`query_gemma4`**: Primary tool to query the self-hosted local model.\n"
+        "- **`query_gemma4_with_stats`**: Queries the local model and provides streaming-based performance metrics (TTFT, throughput, latency).\n"
+        "- **`verify_model_health`**: Performs a deep health check by querying the model with a simple prompt and measuring response latency.\n"
+        "- **`get_model_details`**: Retrieves detailed information about the running local model, engine, and versions.\n"
+    )
+
+
+@mcp.tool()
+async def get_active_models() -> str:
+    """Gets the active resource usage (actively loaded models, sizes, CPU/GPU status, context size) via ollama ps."""
+    if "ollama" not in LOCAL_DOCKER_IMAGE.lower():
+        return "❌ Active resource usage (ollama ps) is only supported on Ollama backend."
+
+    cmd = ["docker", "exec", "vllm-gemma4", "ollama", "ps"]
+    rc, out, err = await run_command(cmd, timeout=30)
+    if rc != 0:
+        return f"⚠️ Failed to check active models.\nError: {err}\nOutput: {out}"
+    return f"### 📊 Active Loaded Models:\n\n```\n{out}\n```"
+
+
+@mcp.tool()
+async def get_model_show_details(model_name: str) -> str:
+    """Gets deep model parameters, architecture, license, and config details via ollama show <model_name>."""
+    if "ollama" not in LOCAL_DOCKER_IMAGE.lower():
+        return "❌ Deep model details (ollama show) are only supported on Ollama backend."
+
+    cmd = ["docker", "exec", "vllm-gemma4", "ollama", "show", model_name]
+    rc, out, err = await run_command(cmd, timeout=30)
+    if rc != 0:
+        return f"⚠️ Failed to get model details for {model_name}.\nError: {err}\nOutput: {out}"
+    return f"### 🧩 Model Details for `{model_name}`:\n\n```\n{out}\n```"
 
 
 if __name__ == "__main__":

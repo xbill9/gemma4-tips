@@ -10,15 +10,15 @@ import httpx
 async def main():
     parser = argparse.ArgumentParser(description="Load testing script for vLLM endpoint.")
     parser.add_argument(
-        "--url", type=str, default="http://34.46.31.222:8000/v1/completions", help="The vLLM endpoint URL."
+        "--url", type=str, default="http://localhost:8000/v1/chat/completions", help="The vLLM endpoint URL."
     )
     parser.add_argument(
-        "--model", type=str, default="google/gemma-4-31B-it", help="The model to use for the load test."
+        "--model", type=str, default="google/gemma-4-E2B-it", help="The model to use for the load test."
     )
     parser.add_argument(
         "--prompt",
         type=str,
-        default="Explain the architecture of TPU v6e (Trillium) and why it is optimized for JAX.",
+        default="Explain the role of an SRE in managing Kubernetes clusters.",
         help="The prompt to send to the model.",
     )
     parser.add_argument("--num-requests", type=int, default=20, help="The total number of requests to send.")
