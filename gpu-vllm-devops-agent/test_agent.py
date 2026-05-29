@@ -86,7 +86,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cmd[4], "test-service")
         self.assertIn("--image=vllm/vllm-openai:latest", cmd)
         self.assertIn(
-            '--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options="uid=1001;gid=1001"',
+            "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options=uid=1001;gid=1001",
             cmd,
         )
         self.assertIn(
@@ -119,7 +119,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         cmd = args[0]
         self.assertIn("--set-secrets=HF_TOKEN=hf-token:latest", cmd)
         self.assertNotIn(
-            '--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options="uid=1001;gid=1001"',
+            "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options=uid=1001;gid=1001",
             cmd,
         )
         self.assertIn(

@@ -438,7 +438,7 @@ def get_vllm_deployment_config(
         )
     else:
         command.append(
-            f'--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options="uid=1001;gid=1001"'
+            f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"
         )
         command.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         command.append(
@@ -501,7 +501,7 @@ async def deploy_vllm(
         )
     else:
         cmd.append(
-            f'--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options="uid=1001;gid=1001"'
+            f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"
         )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         cmd.append(
