@@ -20,6 +20,7 @@ This document provides a summary of the MCP tools available in the `server.py` f
 -   **`check_tpu_availability`**: A simple check to see if a Queued Resource has reached the `ACTIVE` state.
 -   **`get_vllm_endpoint`**: A discovery tool to verify connectivity and return the active vLLM service URL.
 -   **`validate_gemma4_deployment`**: Performs a comprehensive sanity check on the Gemma 4 deployment, including connectivity, configuration flags, and a logic test.
+-   **`get_help`**: Provides help text and summarizes the configuration options and all available SRE/DevOps tools.
 
 ## Performance & Benchmarking
 

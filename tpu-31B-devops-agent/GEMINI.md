@@ -8,7 +8,7 @@ This project functions as an expert TPU SRE and DevOps Engineer, specialized in 
 This project provides an automated DevOps/SRE assistant that leverages **Gemma 4 models self-hosted via vLLM on Cloud TPUs**. It bridges Google Cloud Logging with a private inference endpoint to analyze infrastructure issues and suggest remediations.
 
 ## 🟢 Current Status: ONLINE
-The Gemma 4 inference stack is currently deployed and active on TPU v6e-8.
+The Gemma 4 inference stack is currently deployed and active on TPU v6e-4.
 *   **Active Endpoint:** `http://YOUR_TPU_IP_ADDRESS:8000`
 *   **Model:** `google/gemma-4-31B-it`
 
@@ -48,7 +48,7 @@ You can configure the following variables for the MCP server:
 ## Technical Standards
 -   **vLLM API:** OpenAI-compatible endpoint at `/v1/chat/completions`.
 -   **Optimization Flags:**
-    -   `--tensor-parallel-size 8`
+    -   `--tensor-parallel-size 4`
     -   `--max-model-len 16384`
     -   `--disable_chunked_mm_input`
     -   `--max_num_batched_tokens 4096` (required for multimodal compatibility)
@@ -159,6 +159,7 @@ The following tools are available via the MCP server:
 *   **`run_load_test_benchmark`**: Performs an external load test and reports throughput and latency (Avg/P95).
 *   **`get_gemma4_full_report`**: Generates a comprehensive technical report of the entire stack.
 *   **`validate_gemma4_deployment`**: Performs a comprehensive sanity check on the stack.
+*   **`get_help`**: Provides help text and summarizes the configuration options and all available SRE/DevOps tools.
 
 ### AI & Interaction
 *   **`query_queued_gemma4`**: Primary tool for interacting with the self-hosted model.

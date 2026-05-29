@@ -1,7 +1,5 @@
-
 import pandas as pd
 import termplotlib as tpl
-import numpy as np
 
 # Load the benchmark data
 try:

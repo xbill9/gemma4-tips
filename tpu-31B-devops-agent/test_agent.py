@@ -29,8 +29,9 @@ sys.modules["google.cloud.secretmanager"] = MagicMock()
 # Now import the functions to test
 from server import (  # noqa: E402
     MODEL_NAME,
-    get_vllm_deployment_config,
+    get_help,
     get_model_details,
+    get_vllm_deployment_config,
     query_queued_gemma4_with_stats,
     save_hf_token,
     verify_model_health,
@@ -48,11 +49,11 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         """Test TPU deployment config generation."""
         mock_get_secret.return_value = "dummy-hf-token"
         # Mock run_command to prevent actual gcloud calls during this test
-        mock_run_command.return_value = 0, "", "" 
+        mock_run_command.return_value = 0, "", ""
 
         config = await get_vllm_deployment_config(service_name="test-vllm", model_name="google/gemma-4-31B-it")
         self.assertIn("gcloud alpha compute tpus tpu-vm create test-vllm", config)
-        self.assertIn("--accelerator-type=v6e-8", config)
+        self.assertIn("--accelerator-type=v6e-4", config)
         self.assertIn("--version=v2-alpha-tpuv6e", config)
 
         self.assertIn("vllm/vllm-tpu:nightly", config)
@@ -113,14 +114,14 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         mock_models_response = MagicMock()
         mock_models_response.json.return_value = {"data": [{"id": "test-model", "max_model_len": 4096}]}
         mock_models_response.status_code = 200
-        
+
         mock_version_response = MagicMock()
         mock_version_response.json.return_value = {"version": "test-version"}
         mock_version_response.status_code = 200
-        
+
         mock_health_response = MagicMock()
         mock_health_response.status_code = 200
-        
+
         mock_metrics_response = MagicMock()
         mock_metrics_response.text = "vllm_requests_running 1"
         mock_metrics_response.status_code = 200
@@ -129,7 +130,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             mock_models_response,
             mock_version_response,
             mock_health_response,
-            mock_metrics_response
+            mock_metrics_response,
         ]
 
         result = await get_model_details()
@@ -140,7 +141,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("vllm_requests_running", result)
 
     @patch("server.secretmanager.SecretManagerServiceClient")
-    @patch("server.get_secret", new_callable=AsyncMock) # Mock get_secret to prevent actual calls
+    @patch("server.get_secret", new_callable=AsyncMock)  # Mock get_secret to prevent actual calls
     async def test_save_hf_token(self, mock_get_secret, mock_secret_client):
         """Test saving HF token to Secret Manager."""
         mock_instance = mock_secret_client.return_value
@@ -150,13 +151,22 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         # First call: simulate secret not found (raises exception)
         # Second call: simulate secret found (returns a dummy secret)
         mock_instance.get_secret.side_effect = [Exception("Secret not found"), MagicMock()]
-        mock_instance.create_secret.return_value = None # Mock create_secret if it doesn't exist
+        mock_instance.create_secret.return_value = None  # Mock create_secret if it doesn't exist
 
         # Test successful save (secret is created and version added)
         result = await save_hf_token("test-token")
         self.assertIn("✅ Token saved.", result)
         mock_instance.create_secret.assert_called_once()
         mock_instance.add_secret_version.assert_called_once()
+
+    async def test_get_help(self):
+        """Test that get_help returns formatted help text containing key configuration parameters."""
+        result = await get_help()
+        self.assertIn("### 🛠️ TPU Gemma 4 SRE Agent Help & Configuration", result)
+        self.assertIn("GOOGLE_CLOUD_PROJECT", result)
+        self.assertIn("MODEL_NAME", result)
+        self.assertIn("ACCELERATOR_TYPE", result)
+        self.assertIn("Available MCP Tools", result)
 
 
 if __name__ == "__main__":

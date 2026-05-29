@@ -16,19 +16,20 @@ from openai import AsyncOpenAI
 logging.basicConfig(
     stream=sys.stderr, level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("vllm-devops-agent")
+logger = logging.getLogger("tpu-31B-devops-agent")
 
 # Initialize FastMCP server
-mcp = FastMCP("Queued TPU vLLM Agent (Gemma 4)")
+mcp = FastMCP("tpu-31B-devops-agent")
 
 # --- Configuration ---
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "aisprint-491218")
-ZONE = os.getenv("GOOGLE_CLOUD_ZONE", "southamerica-east1-c")
-REGION = os.getenv("GOOGLE_CLOUD_REGION", "southamerica-east1")
+ZONE = "europe-west4-a"
+REGION = "europe-west4"
 MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-31B-it")
 HF_SECRET_ID = "hf-token"
-ACCELERATOR_TYPE = os.getenv("ACCELERATOR_TYPE", "v6e-8")
+ACCELERATOR_TYPE = os.getenv("ACCELERATOR_TYPE", "v6e-4")
 TENSOR_PARALLEL_SIZE = int(os.getenv("TENSOR_PARALLEL_SIZE", "4"))
+LOCAL_DOCKER_IMAGE = os.getenv("LOCAL_DOCKER_IMAGE", "")
 
 # --- Helper Functions ---
 
@@ -116,6 +117,7 @@ async def _get_formatted_startup_script(model_name: str, hf_token: str) -> str:
             zone=ZONE,
             model_name=model_name,
             hf_token=hf_token,
+            limit_mm_per_prompt_env='export VLLM_LIMIT_MM_PER_PROMPT=\'{"image":4,"audio":1}\'',
         )
     except Exception as e:
         logger.error(f"Error formatting startup script: {e}")
@@ -197,7 +199,7 @@ async def save_hf_token(token: str) -> str:
     """Securely saves a Hugging Face API token to GCP Secret Manager."""
     client = secretmanager.SecretManagerServiceClient()
     secret_parent = f"projects/{PROJECT_ID}/secrets/{HF_SECRET_ID}"
-    
+
     try:
         # Check if the secret already exists
         await asyncio.to_thread(client.get_secret, request={"name": secret_parent})
@@ -226,7 +228,7 @@ async def get_vllm_deployment_config(service_name: str = "vllm-gemma4-qr", model
     hf_token = await get_secret() or "YOUR_HF_TOKEN"
     cmd = (
         f"gcloud alpha compute tpus tpu-vm create {service_name} \\\n"
-        f"  --accelerator-type=v6e-8 \\\n"
+        f"  --accelerator-type=v6e-4 \\\n"
         f"  --version=v2-alpha-tpuv6e \\\n"
         f"  --zone={ZONE} \\\n"
         f"  --project={PROJECT_ID} \\\n"
@@ -235,7 +237,7 @@ async def get_vllm_deployment_config(service_name: str = "vllm-gemma4-qr", model
         f"-v /dev/shm:/dev/shm --shm-size 10gb "
         f"-e HF_TOKEN={hf_token} "
         f"vllm/vllm-tpu:nightly vllm serve {model_name} "
-        f"--max-model-len 16384 --tensor-parallel-size 8 --disable_chunked_mm_input'"
+        f"--max-model-len 16384 --tensor-parallel-size 4 --disable_chunked_mm_input'"
     )
     return cmd
 
@@ -262,7 +264,7 @@ spec:
         image: vllm/vllm-tpu:nightly
         resources:
           limits:
-            google.com/tpu: "8"
+            google.com/tpu: "4"
         env:
         - name: MODEL_NAME
           value: google/gemma-4-31B-it
@@ -271,7 +273,6 @@ spec:
 
 
 # --- MCP Tools ---
-
 
 
 @mcp.tool()
@@ -373,7 +374,9 @@ async def manage_queued_resource(resource_id: str = "vllm-gemma4-qr") -> str:
 
         if rc_c != 0:
             return f"❌ Creation failed: {err_c}. Cleaned up: {redundant_deleted}"
-        return f"🚀 Primary resource {resource_id} creation initiated with startup script. Cleaned up: {redundant_deleted}"
+        return (
+            f"🚀 Primary resource {resource_id} creation initiated with startup script. Cleaned up: {redundant_deleted}"
+        )
 
     state = primary_res.get("state", {}).get("state", "UNKNOWN")
     return f"✅ Primary resource {resource_id} is {state}. Cleaned up: {redundant_deleted}"
@@ -395,8 +398,8 @@ async def manage_vllm_docker(resource_id: str = "vllm-gemma4-qr", action: str = 
         f"{docker_image} vllm serve {MODEL_NAME} "
         f"--tensor-parallel-size 4 --disable_chunked_mm_input --max_model_len=65536 "
         f"--max-num_batched_tokens 4096 --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 "
-        f"--limit-mm-per-prompt '{{\"image\":0,\"audio\":0}}'"
-        )
+        f'--limit-mm-per-prompt \'{{"image":0,"audio":0}}\''
+    )
 
     commands = {
         "start": f"sudo docker start vllm-gemma4 || {docker_run_cmd}",
@@ -698,7 +701,6 @@ async def run_vllm_benchmark(
         f"vllm/vllm-tpu:nightly {benchmark_cmd}"
     )
 
-
     ssh_cmd = [
         "gcloud",
         "compute",
@@ -812,7 +814,7 @@ async def analyze_cloud_logging(minutes: int = 60) -> str:
     """Summarizes TPU-related errors using the self-hosted Gemma 4 model."""
     log_filter = f'resource.type="tpu_worker" severity>=ERROR timestamp>="-PT{minutes}M"'
     logs_result = await get_cloud_logging_logs(log_filter=log_filter, limit=10)
-    
+
     if "error" in logs_result.lower() or "failed" in logs_result.lower() or "```\n\n```" in logs_result:
         prompt = "Provide a summary of common TPU node issues (e.g. out of memory, VM preemption) and their standard remediations."
     else:
@@ -820,7 +822,7 @@ async def analyze_cloud_logging(minutes: int = 60) -> str:
             f"Here are the recent TPU error logs:\n{logs_result}\n\n"
             "Please analyze these logs, identify the root cause of the failures, and suggest remediations."
         )
-        
+
     try:
         summary = await query_queued_gemma4(prompt)
         return f"### 🔍 Log Analysis Summary\n\n{summary}"
@@ -908,6 +910,83 @@ async def get_model_details() -> str:
 
     return report
 
+
+@mcp.tool()
+async def get_help() -> str:
+    """Provides help text and summarizes the configuration options and all available SRE/DevOps tools for this TPU Cloud Run/VM MCP server."""
+    return (
+        "### 🛠️ TPU Gemma 4 SRE Agent Help & Configuration\n\n"
+        "You can configure this MCP server using the following environment variables:\n\n"
+        f"- **`GOOGLE_CLOUD_PROJECT`**: Your GCP Project ID.\n"
+        f"  - *Current Value:* `{PROJECT_ID}`\n"
+        f"- **`GOOGLE_CLOUD_ZONE`**: The GCP Zone for deployment.\n"
+        f"  - *Current Value:* `{ZONE}`\n"
+        f"- **`GOOGLE_CLOUD_REGION`**: The GCP Region for network resources.\n"
+        f"  - *Current Value:* `{REGION}`\n"
+        f"- **`MODEL_NAME`**: Default Hugging Face repository or path.\n"
+        f"  - *Current Value:* `{MODEL_NAME}`\n"
+        f"- **`ACCELERATOR_TYPE`**: TPU Accelerator type.\n"
+        f"  - *Current Value:* `{ACCELERATOR_TYPE}`\n"
+        f"- **`TENSOR_PARALLEL_SIZE`**: Tensor parallel size for serving.\n"
+        f"  - *Current Value:* `{TENSOR_PARALLEL_SIZE}`\n\n"
+        "### ℹ️ Active Mode Summary\n"
+        "The server is running in **TPU** mode targeting TPU VM resources.\n\n"
+        "---\n\n"
+        "### 🧰 Available MCP Tools\n\n"
+        "Below is a summary of the tools exposed by this SRE/DevOps agent:\n\n"
+        "#### 🐳 Infrastructure & Deployment\n"
+        "- **`deploy_vllm`**: Deploys vLLM on a Queued TPU VM resource.\n"
+        "- **`destroy_vllm`**: Deletes the Queued TPU VM resource and VM.\n"
+        "- **`status_vllm`**: Checks the status of the Queued TPU VM.\n"
+        "- **`update_vllm_scaling`**: Placeholder for scaling/configuration updates.\n"
+        "- **`get_vllm_deployment_config`**: Generates the gcloud command for Queued Resource creation.\n"
+        "- **`get_vllm_tpu_deployment_config`**: Generates Kubernetes/GKE manifest for TPU.\n\n"
+        "#### 📊 Model Management\n"
+        "- **`save_hf_token`**: Securely saves a Hugging Face API token to Secret Manager.\n"
+        "- **`get_vertex_ai_model_copy_instructions`**: Instructions to copy model from Vertex AI Model Garden to GCS.\n"
+        "- **`get_huggingface_model_copy_instructions`**: Instructions to download model from Hugging Face and upload to GCS.\n"
+        "- **`get_huggingfacehub_download_path`**: Resolves local cache path using huggingface_hub.\n\n"
+        "#### 📊 Monitoring & Logs\n"
+        "- **`get_system_status`**: High-level status dashboard of TPU node health and vLLM service.\n"
+        "- **`get_endpoint`**: Verifies connectivity and returns the active service URL.\n"
+        "- **`get_vllm_docker_logs`**: Retrieves logs from the vLLM Docker container on the TPU VM.\n"
+        "- **`get_tpu_system_logs`**: Retrieves systemd logs for a specific service from the TPU VM.\n"
+        "- **`get_cloud_logging_logs`**: Fetches logs from Google Cloud Logging for `tpu_worker`.\n"
+        "- **`analyze_cloud_logging`**: Summarizes TPU-related errors using the self-hosted Gemma 4 model.\n"
+        "- **`get_model_details`**: Retrieves detailed information about the running model, vLLM engine, and versions.\n\n"
+        "#### 📈 Diagnostics & Performance\n"
+        "- **`query_queued_gemma4`**: Queries the running Gemma 4 model on the TPU VM.\n"
+        "- **`query_queued_gemma4_with_stats`**: Queries model and provides latency/throughput stats.\n"
+        "- **`verify_model_health`**: Verifies model inference health with a simple prompt.\n"
+        "- **`run_benchmark`**: Runs a performance benchmark suite on the TPU VM.\n"
+        "- **`get_help`**: Provides this help text and summarizes configuration/tools."
+    )
+
+
+@mcp.tool()
+async def get_active_models() -> str:
+    """Gets the active resource usage (actively loaded models, sizes, CPU/GPU status, context size) via ollama ps."""
+    if "ollama" not in LOCAL_DOCKER_IMAGE.lower():
+        return "❌ Active resource usage (ollama ps) is only supported on Ollama backend."
+
+    cmd = ["docker", "exec", "gemma4", "ollama", "ps"]
+    rc, out, err = await run_command(cmd, timeout=30)
+    if rc != 0:
+        return f"⚠️ Failed to check active models.\nError: {err}\nOutput: {out}"
+    return f"### 📊 Active Loaded Models:\n\n```\n{out}\n```"
+
+
+@mcp.tool()
+async def get_model_show_details(model_name: str) -> str:
+    """Gets deep model parameters, architecture, license, and config details via ollama show <model_name>."""
+    if "ollama" not in LOCAL_DOCKER_IMAGE.lower():
+        return "❌ Deep model details (ollama show) are only supported on Ollama backend."
+
+    cmd = ["docker", "exec", "gemma4", "ollama", "show", model_name]
+    rc, out, err = await run_command(cmd, timeout=30)
+    if rc != 0:
+        return f"⚠️ Failed to get model details for {model_name}.\nError: {err}\nOutput: {out}"
+    return f"### 🧩 Model Details for `{model_name}`:\n\n```\n{out}\n```"
 
 
 if __name__ == "__main__":

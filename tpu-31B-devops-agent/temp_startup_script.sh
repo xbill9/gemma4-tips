@@ -4,9 +4,9 @@ set -ex # Enable command tracing and exit on error
 
 echo "Starting Queued vLLM Bootloader..."
 echo "-----------------------------------"
-echo "Project ID: {project_id}"
-echo "Zone: {zone}"
-echo "Model Name: {model_name}"
+echo "Project ID: aisprint-491218"
+echo "Zone: europe-west4-a"
+echo "Model Name: google/gemma-4-31B-it"
 echo "HF_SECRET_ID: hf-token"
 echo "-----------------------------------"
 
@@ -50,19 +50,19 @@ set -e # Re-enable exit on error
 
 # Set vLLM environment variables
 echo "Setting vLLM environment variables..."
-VLLM_MODEL="{model_name}"
+VLLM_MODEL="google/gemma-4-31B-it"
 VLLM_MAX_MODEL_LEN="65536"
 VLLM_TP_SIZE="4"
 VLLM_MAX_BATCHED_TOKENS="4096"
-{limit_mm_per_prompt_env}
+export VLLM_LIMIT_MM_PER_PROMPT='{"image":4,"audio":1}'
 HF_HOME="/dev/shm"
-HF_TOKEN="{hf_token}" # This will be sensitive, ensure it's quoted and not directly echoed for logs
+HF_TOKEN="test-token" # This will be sensitive, ensure it's quoted and not directly echoed for logs
 
 echo "VLLM_MODEL set to: $VLLM_MODEL"
 echo "VLLM_MAX_MODEL_LEN set to: $VLLM_MAX_MODEL_LEN"
 echo "VLLM_TP_SIZE set to: $VLLM_TP_SIZE"
 echo "VLLM_MAX_BATCHED_TOKENS set to: $VLLM_MAX_BATCHED_TOKENS"
-if [ -n "{limit_mm_per_prompt_env}" ]; then
+if [ -n "export VLLM_LIMIT_MM_PER_PROMPT='{"image":4,"audio":1}'" ]; then
   echo "VLLM_LIMIT_MM_PER_PROMPT set." # Don't echo actual value for sensitive info
 fi
 echo "HF_HOME set to: $HF_HOME"
@@ -85,7 +85,8 @@ echo "Executing command: sudo docker run --name vllm-gemma4 --privileged --net=h
   --max_num_batched_tokens 4096 \\
   --enable-auto-tool-choice \\
   --tool-call-parser gemma4 \\
-  --reasoning-parser gemma4"
+  --reasoning-parser gemma4 \\
+  --verbose"
 
 sudo docker run --name vllm-gemma4 --privileged --net=host -d \
   -v /dev/shm:/dev/shm --shm-size 10gb \
@@ -98,7 +99,8 @@ sudo docker run --name vllm-gemma4 --privileged --net=host -d \
   --max_num_batched_tokens 4096 \
   --enable-auto-tool-choice \
   --tool-call-parser gemma4 \
-  --reasoning-parser gemma4
+  --reasoning-parser gemma4 \
+  --verbose
 
 if [ $? -ne 0 ]; then
   echo "ERROR: Docker run command failed. Check parameters and image."
