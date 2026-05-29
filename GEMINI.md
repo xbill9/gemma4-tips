@@ -19,18 +19,30 @@ Here are the key entrypoints in the codebase:
 - **Local Agent:**
   - Server source: [local-devops-agent/server.py](file:///home/xbill/gemma4-tips/local-devops-agent/server.py)
   - Details: [local-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/local-devops-agent/GEMINI.md) & [local-devops-agent/README.md](file:///home/xbill/gemma4-tips/local-devops-agent/README.md)
-- **GPU Agent (26B):**
-  - Server source: [gpu-26B-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/server.py)
-  - Details: [gpu-26B-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/README.md) & [gpu-26B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/GEMINI.md)
+- **GPU Agent (4B L4):**
+  - Server source: [gpu-4B-L4-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent/server.py)
+  - Details: [gpu-4B-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent/README.md)
+- **GPU Agent (4B 6000):**
+  - Server source: [gpu-4B-6000-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent/server.py)
+  - Details: [gpu-4B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent/README.md)
+- **GPU Agent (26B 6000):**
+  - Server source: [gpu-26B-6000-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent/server.py)
+  - Details: [gpu-26B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent/README.md)
+- **GPU Agent (31B 6000):**
+  - Server source: [gpu-31B-6000-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/server.py)
+  - Details: [gpu-31B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/README.md)
 - **GPU Agent (6000):**
   - Server source: [gpu-6000-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/server.py)
   - Details: [gpu-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/README.md)
 - **GPU Agent (vLLM):**
   - Server source: [gpu-vllm-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py)
   - Details: [gpu-vllm-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/README.md)
-- **TPU Agent:**
-  - Server source: [tpu-vllm-devops-agent/server.py](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/server.py)
-  - Details: [tpu-vllm-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/GEMINI.md) & [tpu-vllm-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/README.md)
+- **TPU Agent (26B):**
+  - Server source: [tpu-26B-devops-agent/server.py](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent/server.py)
+  - Details: [tpu-26B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent/README.md)
+- **TPU Agent (31B):**
+  - Server source: [tpu-31B-devops-agent/server.py](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/server.py)
+  - Details: [tpu-31B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/GEMINI.md) & [tpu-31B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/README.md)
 
 ---
 
@@ -85,7 +97,7 @@ Create a `litellm_config.yaml`:
 model_list:
   - model_name: "gemma4-gpu-6000"
     litellm_params:
-      model: "openai/google/gemma-4-26B-A4B-it"
+      model: "openai/google/gemma-4-26B-it"
       api_base: "https://your-cloud-run-url/v1"
       api_key: "none"
     router_settings:
@@ -140,7 +152,7 @@ Then configure your shell environment:
 export GOOGLE_GEMINI_BASE_URL="http://localhost:4000"
 export GEMINI_API_KEY="local-proxy-token"
 # Select model target corresponding to option chosen
-export GEMINI_MODEL="google/gemma-4-31B-it" # Or google/gemma-4-E2B-it / google/gemma-4-26B-A4B-it / google/gemma-4-E4B-it
+export GEMINI_MODEL="google/gemma-4-31B-it" # Or google/gemma-4-E2B-it / google/gemma-4-26B-it / google/gemma-4-E4B-it
 ```
 
 ---

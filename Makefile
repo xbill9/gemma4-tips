@@ -1,13 +1,17 @@
 # Root Makefile for managing all subdirectories
 
 # List of subdirectories containing a Makefile
-SUBDIRS := gpu-26B-devops-agent \
+SUBDIRS := gpu-26B-6000-devops-agent \
+           gpu-31B-6000-devops-agent \
+           gpu-4B-6000-devops-agent \
+           gpu-4B-L4-devops-agent \
            gpu-6000-devops-agent \
            gpu-vllm-devops-agent \
            local-devops-agent \
-           tpu-vllm-devops-agent
+           tpu-26B-devops-agent \
+           tpu-31B-devops-agent
 
-.PHONY: all clean test lint install $(SUBDIRS)
+.PHONY: all clean test lint install deploy $(SUBDIRS)
 
 # Default target displays help information
 all:
@@ -19,6 +23,7 @@ all:
 	@echo "  make test    - Run 'make test' in all subdirectories"
 	@echo "  make lint    - Run 'make lint' in all subdirectories"
 	@echo "  make install - Run 'make install' in all subdirectories"
+	@echo "  make deploy  - Run 'make deploy' in all subdirectories"
 	@echo "========================================================="
 
 # Target-specific variable assignments
@@ -33,6 +38,9 @@ lint: $(SUBDIRS)
 
 install: TARGET := install
 install: $(SUBDIRS)
+
+deploy: TARGET := deploy
+deploy: $(SUBDIRS)
 
 # Run the specified target in each subdirectory if a Makefile exists
 $(SUBDIRS):

@@ -1,20 +1,24 @@
 # 🚀 Gemma 4 DevOps Agents
 
-Welcome to the **Gemma-4 DevOps Agents** workspace. This repository contains three specialized, self-hosted AI-driven DevOps/SRE agents powered by Google's **Gemma 4** model. These agents are packaged as Model Context Protocol (MCP) servers to analyze, monitor, and troubleshoot infrastructure components.
+Welcome to the **Gemma-4 DevOps Agents** workspace. This repository contains nine specialized, self-hosted AI-driven DevOps/SRE agents powered by Google's **Gemma 4** model. These agents are packaged as Model Context Protocol (MCP) servers to analyze, monitor, and troubleshoot infrastructure components.
 
 ---
 
 ## 📂 Project Structure
 
-This workspace is organized into five distinct sub-agents, each tailored to a specific environment and serving stack:
+This workspace is organized into nine distinct sub-agents, each tailored to a specific environment, model configuration, and serving stack:
 
 | Sub-Agent | Purpose | Serving Engine | Target Infrastructure |
 | :--- | :--- | :--- | :--- |
 | [Local DevOps Agent](file:///home/xbill/gemma4-tips/local-devops-agent) | CPU/GPU local analysis & prototyping | Ollama / vLLM | Local Docker / Workstations |
-| [GPU DevOps Agent (26B)](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent) | Serverless GPU-accelerated cloud analysis (26B config) | vLLM | Google Cloud Run (us-central1) |
-| [GPU DevOps Agent (6000)](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent) | Serverless GPU-accelerated cloud analysis (RTX 6000) | vLLM | Google Cloud Run (us-central1) |
-| [GPU DevOps Agent (vLLM)](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent) | Serverless GPU-accelerated cloud analysis (L4 GPU) | vLLM | Google Cloud Run (us-east4) |
-| [TPU DevOps Agent](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent) | Ultra-high performance enterprise log & infra analysis | vLLM | Google Cloud TPUs (v6e Trillium) |
+| [GPU DevOps Agent (4B L4)](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent) | Serverless cloud SRE (4B model on L4 GPU) | vLLM | Google Cloud Run (us-east4) |
+| [GPU DevOps Agent (4B 6000)](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent) | Serverless cloud SRE (4B model on RTX 6000 GPU) | vLLM | Google Cloud Run (us-central1) |
+| [GPU DevOps Agent (26B 6000)](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent) | Serverless cloud SRE (26B model on RTX 6000 GPU) | vLLM | Google Cloud Run (us-central1) |
+| [GPU DevOps Agent (31B 6000)](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent) | Serverless cloud SRE (31B model on RTX 6000 GPU) | vLLM | Google Cloud Run (us-central1) |
+| [GPU DevOps Agent (6000)](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent) | Serverless cloud SRE (RTX 6000 GPU configuration) | vLLM | Google Cloud Run (us-central1) |
+| [GPU DevOps Agent (vLLM)](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent) | Serverless cloud SRE (L4 GPU configuration) | vLLM | Google Cloud Run (us-east4) |
+| [TPU DevOps Agent (26B)](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent) | Ultra-high performance TPU SRE (26B configuration) | vLLM | Google Cloud TPUs (v6e Trillium) |
+| [TPU DevOps Agent (31B)](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent) | Ultra-high performance TPU SRE (31B configuration) | vLLM | Google Cloud TPUs (v6e Trillium) |
 
 ---
 
@@ -58,58 +62,53 @@ A root [Makefile](file:///home/xbill/gemma4-tips/Makefile) is provided to manage
 ## 🚀 Sub-Agent Overviews
 
 ### 1. [Local DevOps Agent](file:///home/xbill/gemma4-tips/local-devops-agent)
-- **Role:** Specialized SRE specialized in local containerized workloads.
+- **Role:** Specialized SRE for local containerized workloads.
 - **Inference Stack:** Runs `gemma4:e2b` or `google/gemma-4-E2B-it` via local Docker (`ollama/ollama` or CPU/GPU vLLM).
-- **Key Tools:**
-  - [manage_docker](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L127): Manage the local container.
-  - [analyze_local_logs](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L371): Automated log diagnostic reports.
-  - [query_gemma4_with_stats](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L225): Measure local inference latency and throughput.
-  - [get_help](file:///home/xbill/gemma4-tips/local-devops-agent/server.py#L418): Retrieve server configuration and tool details.
 - **Documentation:** See [local-devops-agent/README.md](file:///home/xbill/gemma4-tips/local-devops-agent/README.md) and [local-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/local-devops-agent/GEMINI.md).
 
-### 2. [GPU DevOps Agent (26B)](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent)
-- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (26B configuration).
-- **Inference Stack:** Runs `google/gemma-4-26B-A4B-it` via vLLM on GCP Cloud Run (RTX 6000 GPU in us-central1).
-- **Key Tools:**
-  - [deploy_vllm](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/server.py#L480): Automates serverless Cloud Run GPU vLLM deployments.
-  - [analyze_cloud_logging](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/server.py#L340): Summarizes Google Cloud Logging errors.
-  - [get_vllm_deployment_config](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/server.py#L390): Generates `gcloud` configuration options.
-  - [get_help](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/server.py#L1274): Retrieve server configuration and tool details.
-- **Documentation:** See [gpu-26B-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/README.md).
+### 2. [GPU DevOps Agent (4B L4)](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent)
+- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 4B configuration on L4 GPU.
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
+- **Documentation:** See [gpu-4B-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent/README.md).
 
-### 3. [GPU DevOps Agent (6000)](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent)
-- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (RTX 6000 config).
-- **Inference Stack:** Runs `google/gemma-4-26B-A4B-it` via vLLM on GCP Cloud Run (RTX 6000 GPU in us-central1).
-- **Key Tools:**
-  - [deploy_vllm](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/server.py#L455): Automates serverless Cloud Run GPU vLLM deployments.
-  - [analyze_cloud_logging](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/server.py#L295): Summarizes Google Cloud Logging errors.
-  - [get_vllm_deployment_config](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/server.py#L391): Generates `gcloud` configuration options.
-  - [get_help](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/server.py#L1223): Retrieve server configuration and tool details.
+### 3. [GPU DevOps Agent (4B 6000)](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent)
+- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 4B configuration on RTX 6000 GPU.
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
+- **Documentation:** See [gpu-4B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent/README.md).
+
+### 4. [GPU DevOps Agent (26B 6000)](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent)
+- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 26B configuration on RTX 6000 GPU.
+- **Inference Stack:** Runs `google/gemma-4-26B-it` via vLLM on Cloud Run.
+- **Documentation:** See [gpu-26B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent/README.md).
+
+### 5. [GPU DevOps Agent (31B 6000)](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent)
+- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 31B configuration on RTX 6000 GPU.
+- **Inference Stack:** Runs `google/gemma-4-26B-A4B-it` via vLLM on Cloud Run.
+- **Documentation:** See [gpu-31B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/README.md).
+
+### 6. [GPU DevOps Agent (6000)](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent)
+- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (RTX 6000 GPU configuration).
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
 - **Documentation:** See [gpu-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/README.md).
 
-### 4. [GPU DevOps Agent (vLLM)](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent)
-- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (L4 configuration).
-- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on GCP Cloud Run (NVIDIA L4 GPU in us-east4).
-- **Key Tools:**
-  - [deploy_vllm](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py#L455): Automates serverless Cloud Run GPU vLLM deployments.
-  - [analyze_cloud_logging](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py#L295): Summarizes Google Cloud Logging errors.
-  - [get_vllm_deployment_config](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py#L391): Generates `gcloud` configuration options.
-  - [get_help](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py#L1223): Retrieve server configuration and tool details.
+### 7. [GPU DevOps Agent (vLLM)](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent)
+- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (L4 GPU configuration).
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
 - **Documentation:** See [gpu-vllm-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/README.md).
 
-### 5. [TPU DevOps Agent](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent)
-- **Role:** High-performance TPU SRE/DevOps managing large-scale private clusters.
-- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM on Google Cloud TPUs (v6e Trillium / Flex-start VMs).
-- **Key Tools:**
-  - [manage_queued_resource](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/server.py#L299): Manage the TPU Queued Resource (create, check, etc.).
-  - [run_vllm_benchmark](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/server.py#L667): Run performance benchmark on TPU.
-  - [query_queued_gemma4_with_stats](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/server.py#L606): Query model on TPU and measure latency/throughput.
-  - [get_help](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/server.py#L913): Retrieve server configuration and tool details.
-- **Documentation:** See [tpu-vllm-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/README.md) and [tpu-vllm-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-vllm-devops-agent/GEMINI.md).
+### 8. [TPU DevOps Agent (26B)](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing large-scale private clusters (26B configuration).
+- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM on Google Cloud TPUs (v6e Trillium).
+- **Documentation:** See [tpu-26B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent/README.md).
+
+### 9. [TPU DevOps Agent (31B)](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing large-scale private clusters (31B configuration).
+- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM on Google Cloud TPUs (v6e Trillium).
+- **Documentation:** See [tpu-31B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/README.md) and [tpu-31B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/GEMINI.md).
 
 ---
 
 ## 🔒 Security & Credentials
 When deploying to Google Cloud or Hugging Face, secure credentials using:
-- **Hugging Face Access Token:** Saved locally or to Google Secret Manager via `save_hf_token` tools.
-- **Application Default Credentials (ADC):** Set up using GCP credentials helper scripts (`set_adc.sh` inside individual sub-agent folders).
+- **Hugging Face Access Token:** Saved locally or to Google Secret Manager.
+- **Application Default Credentials (ADC):** Set up using GCP credentials helper scripts.
