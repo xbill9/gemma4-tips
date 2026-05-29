@@ -1,12 +1,14 @@
 import os
-import pandas as pd
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import pandas as pd
+
 
 def generate_comparison():
     gpu_csv = "/home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/matrix_benchmark_results.csv"
     tpu_csv = "/home/xbill/gemma4-tips/tpu-31B-devops-agent/matrix_benchmark_results.csv"
-    
+
     if not os.path.exists(gpu_csv) or not os.path.exists(tpu_csv):
         print("Error: Missing CSV files.")
         return
@@ -28,16 +30,18 @@ def generate_comparison():
     plt.rcParams["font.size"] = 11
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), facecolor="#0f172a")
-    fig.suptitle("Gemma 4 (31B) serving: RTX 6000 Pro GPU vs TPU v6e-4", fontsize=18, fontweight="bold", color="#f8fafc", y=0.96)
+    fig.suptitle(
+        "Gemma 4 (31B) serving: RTX 6000 Pro GPU vs TPU v6e-4", fontsize=18, fontweight="bold", color="#f8fafc", y=0.96
+    )
 
     # We will compare a small context (8 tokens) and a large context (16,384 tokens)
     sizes_to_plot = [8, 16384]
-    
+
     # Subplot 1: Throughput (Tokens/s) vs Concurrency
     ax1 = axes[0]
     ax1.set_title("Token Throughput (tokens/sec) vs Concurrency", fontsize=13, fontweight="semibold", pad=15)
     ax1.grid(True)
-    
+
     # Subplot 2: Average Latency vs Concurrency
     ax2 = axes[1]
     ax2.set_title("Average Latency (seconds) vs Concurrency", fontsize=13, fontweight="semibold", pad=15)
@@ -59,21 +63,45 @@ def generate_comparison():
 
         if not sub_tpu.empty:
             style = styles[("TPU", size)]
-            ax1.plot(sub_tpu["concurrency"], sub_tpu["tokens_per_sec"], 
-                     color=style["color"], linestyle=style["ls"], marker=style["marker"], 
-                     linewidth=2.5, label=style["label"])
-            ax2.plot(sub_tpu["concurrency"], sub_tpu["avg_latency"], 
-                     color=style["color"], linestyle=style["ls"], marker=style["marker"], 
-                     linewidth=2.5, label=style["label"])
-            
+            ax1.plot(
+                sub_tpu["concurrency"],
+                sub_tpu["tokens_per_sec"],
+                color=style["color"],
+                linestyle=style["ls"],
+                marker=style["marker"],
+                linewidth=2.5,
+                label=style["label"],
+            )
+            ax2.plot(
+                sub_tpu["concurrency"],
+                sub_tpu["avg_latency"],
+                color=style["color"],
+                linestyle=style["ls"],
+                marker=style["marker"],
+                linewidth=2.5,
+                label=style["label"],
+            )
+
         if not sub_gpu.empty:
             style = styles[("GPU", size)]
-            ax1.plot(sub_gpu["concurrency"], sub_gpu["tokens_per_sec"], 
-                     color=style["color"], linestyle=style["ls"], marker=style["marker"], 
-                     linewidth=2.5, label=style["label"])
-            ax2.plot(sub_gpu["concurrency"], sub_gpu["avg_latency"], 
-                     color=style["color"], linestyle=style["ls"], marker=style["marker"], 
-                     linewidth=2.5, label=style["label"])
+            ax1.plot(
+                sub_gpu["concurrency"],
+                sub_gpu["tokens_per_sec"],
+                color=style["color"],
+                linestyle=style["ls"],
+                marker=style["marker"],
+                linewidth=2.5,
+                label=style["label"],
+            )
+            ax2.plot(
+                sub_gpu["concurrency"],
+                sub_gpu["avg_latency"],
+                color=style["color"],
+                linestyle=style["ls"],
+                marker=style["marker"],
+                linewidth=2.5,
+                label=style["label"],
+            )
 
     ax1.set_xlabel("Concurrency (Concurrent Users)", labelpad=10)
     ax1.set_ylabel("Tokens per Second", labelpad=10)
@@ -90,10 +118,11 @@ def generate_comparison():
     ax2.legend(frameon=True, facecolor="#1e293b", edgecolor="#334155")
 
     plt.tight_layout(rect=(0, 0.03, 1, 0.92))
-    
+
     chart_path = "/home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/gpu_tpu_comparison.png"
     plt.savefig(chart_path, dpi=300, facecolor=fig.get_facecolor(), edgecolor="none")
     print(f"Comparison chart saved to {chart_path}")
+
 
 if __name__ == "__main__":
     generate_comparison()
