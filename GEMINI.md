@@ -19,7 +19,13 @@ Here are the key entrypoints in the codebase:
 - **Local Agent:**
   - Server source: [local-devops-agent/server.py](file:///home/xbill/gemma4-tips/local-devops-agent/server.py)
   - Details: [local-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/local-devops-agent/GEMINI.md) & [local-devops-agent/README.md](file:///home/xbill/gemma4-tips/local-devops-agent/README.md)
-- **GPU Agent:**
+- **GPU Agent (26B):**
+  - Server source: [gpu-26B-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/server.py)
+  - Details: [gpu-26B-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/README.md) & [gpu-26B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-26B-devops-agent/GEMINI.md)
+- **GPU Agent (6000):**
+  - Server source: [gpu-6000-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/server.py)
+  - Details: [gpu-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/README.md)
+- **GPU Agent (vLLM):**
   - Server source: [gpu-vllm-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py)
   - Details: [gpu-vllm-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/README.md)
 - **TPU Agent:**
@@ -30,7 +36,7 @@ Here are the key entrypoints in the codebase:
 
 ## 🛠 Development Workflow & Makefile Tasks
 
-For developer convenience, the root [Makefile](file:///home/xbill/gemma4-tips/Makefile) aggregates tasks across all three sub-agents:
+For developer convenience, the root [Makefile](file:///home/xbill/gemma4-tips/Makefile) aggregates tasks across all sub-agents:
 
 ```bash
 # Run 'make clean', 'make test', 'make lint', or 'make install' to invoke it on all agents
@@ -73,21 +79,38 @@ model_list:
         "gemini-1.5-pro": "gemma4-local"
 ```
 
-#### Option B: Target Cloud Run GPU Agent
+#### Option B1: Target Cloud Run GPU Agent (RTX 6000 Config)
 Create a `litellm_config.yaml`:
 ```yaml
 model_list:
-  - model_name: "gemma4-gpu"
+  - model_name: "gemma4-gpu-6000"
+    litellm_params:
+      model: "openai/google/gemma-4-26B-A4B-it"
+      api_base: "https://your-cloud-run-url/v1"
+      api_key: "none"
+    router_settings:
+      model_group_alias:
+        "gemini-2.0-flash": "gemma4-gpu-6000"
+        "gemini-2.0-flash-lite": "gemma4-gpu-6000"
+        "gemini-1.5-flash": "gemma4-gpu-6000"
+        "gemini-1.5-pro": "gemma4-gpu-6000"
+```
+
+#### Option B2: Target Cloud Run GPU Agent (L4 Config)
+Create a `litellm_config.yaml`:
+```yaml
+model_list:
+  - model_name: "gemma4-gpu-l4"
     litellm_params:
       model: "openai/google/gemma-4-E4B-it"
       api_base: "https://your-cloud-run-url/v1"
       api_key: "none"
     router_settings:
       model_group_alias:
-        "gemini-2.0-flash": "gemma4-gpu"
-        "gemini-2.0-flash-lite": "gemma4-gpu"
-        "gemini-1.5-flash": "gemma4-gpu"
-        "gemini-1.5-pro": "gemma4-gpu"
+        "gemini-2.0-flash": "gemma4-gpu-l4"
+        "gemini-2.0-flash-lite": "gemma4-gpu-l4"
+        "gemini-1.5-flash": "gemma4-gpu-l4"
+        "gemini-1.5-pro": "gemma4-gpu-l4"
 ```
 
 #### Option C: Target Cloud TPU Agent
@@ -117,7 +140,7 @@ Then configure your shell environment:
 export GOOGLE_GEMINI_BASE_URL="http://localhost:4000"
 export GEMINI_API_KEY="local-proxy-token"
 # Select model target corresponding to option chosen
-export GEMINI_MODEL="google/gemma-4-31B-it" # Or google/gemma-4-E2B-it / google/gemma-4-E4B-it
+export GEMINI_MODEL="google/gemma-4-31B-it" # Or google/gemma-4-E2B-it / google/gemma-4-26B-A4B-it / google/gemma-4-E4B-it
 ```
 
 ---
@@ -127,3 +150,4 @@ When managing TPU/GPU deployments or customizing vLLM serving, ensure the follow
 - **Optimization flags:** `--tensor-parallel-size 8` (TPU v6e-8), `--disable_chunked_mm_input`, `--max-model-len 16384`.
 - **Tool Parsing:** `--enable-auto-tool-choice`, `--tool-call-parser gemma4`, and `--reasoning-parser gemma4` to enable native function calling compatibility.
 - **Multimodal configuration:** `--limit-mm-per-prompt '{"image":4,"audio":1}'` and `--max_num_batched_tokens 4096`.
+- **Universal SRE Help:** All agents expose a standardized `get_help` tool providing details on active configuration environment variables and all exposed tools.

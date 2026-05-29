@@ -1,7 +1,9 @@
 # Root Makefile for managing all subdirectories
 
 # List of subdirectories containing a Makefile
-SUBDIRS := gpu-vllm-devops-agent \
+SUBDIRS := gpu-26B-devops-agent \
+           gpu-6000-devops-agent \
+           gpu-vllm-devops-agent \
            local-devops-agent \
            tpu-vllm-devops-agent
 
