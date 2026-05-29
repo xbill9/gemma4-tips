@@ -434,7 +434,9 @@ def get_vllm_deployment_config(
     ]
 
     model_name_val = model_path if is_hf else f"/mnt/models/{model_path}"
-    command.append(f'--set-env-vars="MODEL_NAME={model_name_val},GOOGLE_CLOUD_PROJECT={PROJECT_ID},GOOGLE_CLOUD_REGION={LOCATION}"')
+    command.append(
+        f'--set-env-vars="MODEL_NAME={model_name_val},GOOGLE_CLOUD_PROJECT={PROJECT_ID},GOOGLE_CLOUD_REGION={LOCATION}"'
+    )
 
     # Build container args
     gcs_model_loc = model_path if is_hf else f"/mnt/models/{model_path}"
@@ -442,24 +444,38 @@ def get_vllm_deployment_config(
         "vllm",
         "serve",
         gcs_model_loc,
-        "--served-model-name", service_name,
+        "--served-model-name",
+        service_name,
         "--enable-log-requests",
         "--enable-chunked-prefill",
         "--enable-prefix-caching",
-        "--generation-config", "auto",
+        "--generation-config",
+        "auto",
         "--enable-auto-tool-choice",
-        "--tool-call-parser", "gemma4",
-        "--reasoning-parser", "gemma4",
-        "--dtype", "bfloat16",
-        "--quantization", "fp8",
-        "--kv-cache-dtype", "fp8",
-        "--max-num-seqs", "8",
-        f"--gpu-memory-utilization", f"{gpu_memory_utilization}",
-        "--tensor-parallel-size", "1",
-        "--load-format", "runai_streamer",
-        "--port", "8080",
-        "--host", "0.0.0.0",
-        "--max-model-len", "32767"
+        "--tool-call-parser",
+        "gemma4",
+        "--reasoning-parser",
+        "gemma4",
+        "--dtype",
+        "bfloat16",
+        "--quantization",
+        "fp8",
+        "--kv-cache-dtype",
+        "fp8",
+        "--max-num-seqs",
+        "8",
+        "--gpu-memory-utilization",
+        f"{gpu_memory_utilization}",
+        "--tensor-parallel-size",
+        "1",
+        "--load-format",
+        "runai_streamer",
+        "--port",
+        "8080",
+        "--host",
+        "0.0.0.0",
+        "--max-model-len",
+        "32767",
     ]
     container_args_str = " ".join(container_args)
     command.append(f'--args="^;^-c;{container_args_str}"')
@@ -520,31 +536,47 @@ async def deploy_vllm(
     ]
 
     model_name_val = model_path if is_hf else f"/mnt/models/{model_path}"
-    cmd.append(f"--set-env-vars=MODEL_NAME={model_name_val},GOOGLE_CLOUD_PROJECT={PROJECT_ID},GOOGLE_CLOUD_REGION={LOCATION}")
+    cmd.append(
+        f"--set-env-vars=MODEL_NAME={model_name_val},GOOGLE_CLOUD_PROJECT={PROJECT_ID},GOOGLE_CLOUD_REGION={LOCATION}"
+    )
 
     gcs_model_loc = model_path if is_hf else f"/mnt/models/{model_path}"
     container_args = [
         "vllm",
         "serve",
         gcs_model_loc,
-        "--served-model-name", service_name,
+        "--served-model-name",
+        service_name,
         "--enable-log-requests",
         "--enable-chunked-prefill",
         "--enable-prefix-caching",
-        "--generation-config", "auto",
+        "--generation-config",
+        "auto",
         "--enable-auto-tool-choice",
-        "--tool-call-parser", "gemma4",
-        "--reasoning-parser", "gemma4",
-        "--dtype", "bfloat16",
-        "--quantization", "fp8",
-        "--kv-cache-dtype", "fp8",
-        "--max-num-seqs", "8",
-        "--gpu-memory-utilization", "0.95",
-        "--tensor-parallel-size", "1",
-        "--load-format", "runai_streamer",
-        "--port", "8080",
-        "--host", "0.0.0.0",
-        "--max-model-len", "32767"
+        "--tool-call-parser",
+        "gemma4",
+        "--reasoning-parser",
+        "gemma4",
+        "--dtype",
+        "bfloat16",
+        "--quantization",
+        "fp8",
+        "--kv-cache-dtype",
+        "fp8",
+        "--max-num-seqs",
+        "8",
+        "--gpu-memory-utilization",
+        "0.95",
+        "--tensor-parallel-size",
+        "1",
+        "--load-format",
+        "runai_streamer",
+        "--port",
+        "8080",
+        "--host",
+        "0.0.0.0",
+        "--max-model-len",
+        "32767",
     ]
     container_args_str = " ".join(container_args)
     cmd.append(f"--args=^;^-c;{container_args_str}")
