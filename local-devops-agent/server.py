@@ -21,7 +21,7 @@ logger = logging.getLogger("vllm-devops-agent")
 mcp = FastMCP("Local Gemma 4 SRE Agent")
 
 # --- Configuration ---
-MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-E2B-it")
+MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-31B-it")
 LOCAL_DOCKER_IMAGE = os.getenv("LOCAL_DOCKER_IMAGE", "ollama/ollama:latest")
 LOCAL_VLLM_PORT = int(os.getenv("LOCAL_VLLM_PORT", "8000"))
 

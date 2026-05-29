@@ -35,7 +35,7 @@ from server import (  # noqa: E402
 class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
     def test_model_name_default(self):
         """Verify the default model is Gemma 4."""
-        self.assertEqual(MODEL_NAME, "google/gemma-4-E2B-it")
+        self.assertEqual(MODEL_NAME, "google/gemma-4-31B-it")
 
     @patch("server.get_vllm_client", new_callable=AsyncMock)
     async def test_verify_model_health_success(self, mock_get_client):
