@@ -225,7 +225,7 @@ startupProbe:
 # For gcloud deployment, use:
 # gcloud run deploy {DEFAULT_SERVICE_NAME} --no-cpu-throttling --allow-unauthenticated --concurrency=4 \\
 #   --timeout=3600 --startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=30,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health \\
-#   --max-instances=1 --args=--model=/mnt/models/nvidia/Gemma-4-31B-IT-NVFP4,--dtype=float16,--quantization=nvfp4,--cpu-offload-gb=15,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000
+#   --max-instances=1 --args=--model=/mnt/models/nvidia/Gemma-4-31B-IT-NVFP4,--dtype=float16,--quantization=nvfp4,--cpu-offload-gb=15,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{"image":0}},--host=0.0.0.0,--port=8000
 volumes:
   - name: model-volume
     cloudStorage:
@@ -414,6 +414,14 @@ def get_vllm_deployment_config(
     """
     # Check if we are pulling directly from Hugging Face
     is_hf = "/" in model_path and not model_path.startswith("/")
+    if is_hf:
+        try:
+            storage_client = storage.Client(project=PROJECT_ID)
+            bucket = storage_client.bucket(bucket_name)
+            if list(bucket.list_blobs(prefix=model_path, max_results=1)):
+                is_hf = False
+        except Exception:
+            pass
 
     # Determine quantization format based on model path
     quantization = "fp8"
@@ -442,7 +450,7 @@ def get_vllm_deployment_config(
         "--no-cpu-throttling",  # Required for GPU deployment
         "--concurrency=4",  # Optimal for LLM throughput vs latency
         "--timeout=3600",  # 1 hour timeout for long generations
-        "--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=30,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health",
+        "--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=60,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health",
         "--max-instances=1",  # Prevent scaling beyond quota
         f"--min-instances={min_instances}",
         "--port=8000",  # vLLM default port
@@ -457,7 +465,7 @@ def get_vllm_deployment_config(
         f"--model={model_path if is_hf else f'/mnt/models/{model_path}'}",
         "--dtype=float16",
         f"--quantization={quantization}",
-        "--safetensors-load-strategy=prefetch",
+        "--safetensors-load-strategy=lazy",
         "--max-model-len=4096",
         "--disable-chunked-mm-input",
         f"--gpu-memory-utilization={gpu_memory_utilization}",
@@ -470,10 +478,10 @@ def get_vllm_deployment_config(
         "--tool-call-parser=gemma4",
         "--reasoning-parser=gemma4",
         "--async-scheduling",
-        "--limit-mm-per-prompt={}",
+        '--limit-mm-per-prompt={"image":0}',
         "--trust-remote-code",
         "--host=0.0.0.0",
-        "--port=8000"
+        "--port=8000",
     ]
     if cpu_offload_gb > 0:
         vllm_args.append(f"--cpu-offload-gb={cpu_offload_gb}")
@@ -485,7 +493,7 @@ def get_vllm_deployment_config(
         command.append(f"--args={vllm_args_str}")
     else:
         command.append(
-            f'"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"'
+            f'"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001;stat-cache-ttl=3600s;type-cache-ttl=3600s;max-conns-per-host=100"'
         )
         command.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         command.append(f"--args={vllm_args_str}")
@@ -513,6 +521,14 @@ async def deploy_vllm(
         cpu_offload_gb: Amount of CPU memory in GiB to allocate for weight offloading. Auto-calculated if None.
     """
     is_hf = "/" in model_path and not model_path.startswith("/")
+    if is_hf:
+        try:
+            storage_client = storage.Client(project=PROJECT_ID)
+            bucket = storage_client.bucket(bucket_name)
+            if list(bucket.list_blobs(prefix=model_path, max_results=1)):
+                is_hf = False
+        except Exception:
+            pass
 
     # Determine quantization format based on model path
     quantization = "fp8"
@@ -545,7 +561,7 @@ async def deploy_vllm(
         "--no-cpu-throttling",
         "--concurrency=4",
         "--timeout=3600",
-        "--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=30,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health",
+        "--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=60,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health",
         "--max-instances=1",
         "--min-instances=0",
         "--port=8000",
@@ -562,7 +578,7 @@ async def deploy_vllm(
         f"--model={model_path if is_hf else f'/mnt/models/{model_path}'}",
         "--dtype=float16",
         f"--quantization={quantization}",
-        "--safetensors-load-strategy=prefetch",
+        "--safetensors-load-strategy=lazy",
         "--max-model-len=4096",
         "--disable-chunked-mm-input",
         "--gpu-memory-utilization=0.95",
@@ -575,10 +591,10 @@ async def deploy_vllm(
         "--tool-call-parser=gemma4",
         "--reasoning-parser=gemma4",
         "--async-scheduling",
-        "--limit-mm-per-prompt={}",
+        '--limit-mm-per-prompt={"image":0}',
         "--trust-remote-code",
         "--host=0.0.0.0",
-        "--port=8000"
+        "--port=8000",
     ]
     if cpu_offload_gb > 0:
         vllm_args.append(f"--cpu-offload-gb={cpu_offload_gb}")
@@ -590,7 +606,7 @@ async def deploy_vllm(
         cmd.append(f"--args={vllm_args_str}")
     else:
         cmd.append(
-            f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"
+            f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001;stat-cache-ttl=3600s;type-cache-ttl=3600s;max-conns-per-host=100"
         )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         cmd.append(f"--args={vllm_args_str}")

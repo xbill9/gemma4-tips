@@ -86,11 +86,11 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cmd[4], "test-service")
         self.assertIn("--image=vllm/vllm-openai:latest", cmd)
         self.assertIn(
-            "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options=uid=1001;gid=1001",
+            "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options=uid=1001;gid=1001;stat-cache-ttl=3600s;type-cache-ttl=3600s;max-conns-per-host=100",
             cmd,
         )
         self.assertIn(
-            "--args=--model=/mnt/models/test-model,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=prefetch,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--trust-remote-code,--host=0.0.0.0,--port=8000",
+            '--args=--model=/mnt/models/test-model,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=lazy,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={"image":0},--trust-remote-code,--host=0.0.0.0,--port=8000',
             cmd,
         )
 
@@ -124,7 +124,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             cmd,
         )
         self.assertIn(
-            "--args=--model=google/gemma-4-31B-it,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=prefetch,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--trust-remote-code,--host=0.0.0.0,--port=8000",
+            '--args=--model=google/gemma-4-31B-it,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=lazy,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={"image":0},--trust-remote-code,--host=0.0.0.0,--port=8000,--cpu-offload-gb=15',
             cmd,
         )
 
