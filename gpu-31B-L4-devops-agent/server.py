@@ -31,7 +31,7 @@ LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-east4")
 BUCKET_NAME = f"{PROJECT_ID}-bucket"
 # The URL of the self-hosted vLLM service on Cloud Run
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL")
-MODEL_NAME = os.getenv("MODEL_NAME", "nvidia/gemma-4-31B-A4B-NVFP4")
+MODEL_NAME = os.getenv("MODEL_NAME", "nvidia/Gemma-4-31B-IT-NVFP4")
 HF_SECRET_ID = "hf-secret" if PROJECT_ID == "comglitn" else "hf-token"
 
 
@@ -225,7 +225,7 @@ startupProbe:
 # For gcloud deployment, use:
 # gcloud run deploy {DEFAULT_SERVICE_NAME} --no-cpu-throttling --allow-unauthenticated --concurrency=4 \\
 #   --timeout=3600 --startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=30,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health \\
-#   --max-instances=1 --args=--model=/mnt/models/nvidia/gemma-4-31B-A4B-NVFP4,--dtype=float16,--quantization=nvfp4,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000
+#   --max-instances=1 --args=--model=/mnt/models/nvidia/Gemma-4-31B-IT-NVFP4,--dtype=float16,--quantization=nvfp4,--cpu-offload-gb=15,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000
 volumes:
   - name: model-volume
     cloudStorage:
@@ -394,10 +394,11 @@ async def query_vllm(prompt: str, max_tokens: int = 512, temperature: float = 0.
 def get_vllm_deployment_config(
     service_name: str = DEFAULT_SERVICE_NAME,
     bucket_name: str = BUCKET_NAME,
-    model_path: str = "nvidia/gemma-4-31B-A4B-NVFP4",
+    model_path: str = "nvidia/Gemma-4-31B-IT-NVFP4",
     allow_unauthenticated: bool = False,
     min_instances: int = 0,
     gpu_memory_utilization: float = 0.95,
+    cpu_offload_gb: Optional[int] = None,
 ) -> str:
     """
     Generates the gcloud command to deploy vLLM to Cloud Run with GCS FUSE and NVIDIA L4 GPU.
@@ -405,10 +406,11 @@ def get_vllm_deployment_config(
     Args:
         service_name: The name for the Cloud Run service.
         bucket_name: The GCS bucket containing the model weights.
-        model_path: The sub-path inside the bucket (e.g., 'nvidia/gemma-4-31B-A4B-NVFP4') or Hugging Face repo ID.
+        model_path: The sub-path inside the bucket (e.g., 'nvidia/Gemma-4-31B-IT-NVFP4') or Hugging Face repo ID.
         allow_unauthenticated: Whether to allow unauthenticated access to the service.
         min_instances: The minimum number of instances to keep warm (default: 0).
-        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.90).
+        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.95).
+        cpu_offload_gb: Amount of CPU memory in GiB to allocate for weight offloading. Auto-calculated if None.
     """
     # Check if we are pulling directly from Hugging Face
     is_hf = "/" in model_path and not model_path.startswith("/")
@@ -421,6 +423,13 @@ def get_vllm_deployment_config(
         quantization = "awq"
     elif "gptq" in model_path.lower():
         quantization = "gptq"
+
+    # Auto-calculate cpu_offload_gb if None and loading a 31B model on 24GB L4 GPU
+    if cpu_offload_gb is None:
+        if "31b" in model_path.lower():
+            cpu_offload_gb = 15
+        else:
+            cpu_offload_gb = 0
 
     command = [
         "gcloud beta run deploy",
@@ -443,19 +452,43 @@ def get_vllm_deployment_config(
         "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
     ]
 
+    # Build vLLM arguments
+    vllm_args = [
+        f"--model={model_path if is_hf else f'/mnt/models/{model_path}'}",
+        "--dtype=float16",
+        f"--quantization={quantization}",
+        "--safetensors-load-strategy=prefetch",
+        "--max-model-len=4096",
+        "--disable-chunked-mm-input",
+        f"--gpu-memory-utilization={gpu_memory_utilization}",
+        "--kv-cache-dtype=fp8",
+        "--tensor-parallel-size=1",
+        "--max-num-seqs=16",
+        "--enable-chunked-prefill",
+        "--max-num-batched-tokens=4096",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser=gemma4",
+        "--reasoning-parser=gemma4",
+        "--async-scheduling",
+        "--limit-mm-per-prompt={}",
+        "--trust-remote-code",
+        "--host=0.0.0.0",
+        "--port=8000"
+    ]
+    if cpu_offload_gb > 0:
+        vllm_args.append(f"--cpu-offload-gb={cpu_offload_gb}")
+
+    vllm_args_str = ",".join(vllm_args)
+
     if is_hf:
         command.append(f"--set-secrets=HF_TOKEN={HF_SECRET_ID}:latest")
-        command.append(
-            f"--args=--model={model_path},--dtype=float16,--quantization={quantization},--safetensors-load-strategy=prefetch,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--trust-remote-code,--host=0.0.0.0,--port=8000"
-        )
+        command.append(f"--args={vllm_args_str}")
     else:
         command.append(
             f'"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"'
         )
         command.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
-        command.append(
-            f"--args=--model=/mnt/models/{model_path},--dtype=float16,--quantization={quantization},--safetensors-load-strategy=prefetch,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--trust-remote-code,--host=0.0.0.0,--port=8000"
-        )
+        command.append(f"--args={vllm_args_str}")
 
     command.append("--allow-unauthenticated" if allow_unauthenticated else "--no-allow-unauthenticated")
     command.append(f"--region={LOCATION}")
@@ -466,8 +499,9 @@ def get_vllm_deployment_config(
 @mcp.tool()
 async def deploy_vllm(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "nvidia/gemma-4-31B-A4B-NVFP4",
+    model_path: str = "nvidia/Gemma-4-31B-IT-NVFP4",
     bucket_name: str = BUCKET_NAME,
+    cpu_offload_gb: Optional[int] = None,
 ) -> str:
     """
     Deploys vLLM to Cloud Run with GPU.
@@ -476,6 +510,7 @@ async def deploy_vllm(
         service_name: Name of the service to deploy.
         model_path: Path to the model (GCS folder name or Hugging Face repo ID).
         bucket_name: GCS bucket name (only used if using GCS FUSE).
+        cpu_offload_gb: Amount of CPU memory in GiB to allocate for weight offloading. Auto-calculated if None.
     """
     is_hf = "/" in model_path and not model_path.startswith("/")
 
@@ -487,6 +522,13 @@ async def deploy_vllm(
         quantization = "awq"
     elif "gptq" in model_path.lower():
         quantization = "gptq"
+
+    # Auto-calculate cpu_offload_gb if None and loading a 31B model on 24GB L4 GPU
+    if cpu_offload_gb is None:
+        if "31b" in model_path.lower():
+            cpu_offload_gb = 15
+        else:
+            cpu_offload_gb = 0
 
     cmd = [
         "gcloud",
@@ -515,19 +557,43 @@ async def deploy_vllm(
         "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
     ]
 
+    # Build vLLM arguments
+    vllm_args = [
+        f"--model={model_path if is_hf else f'/mnt/models/{model_path}'}",
+        "--dtype=float16",
+        f"--quantization={quantization}",
+        "--safetensors-load-strategy=prefetch",
+        "--max-model-len=4096",
+        "--disable-chunked-mm-input",
+        "--gpu-memory-utilization=0.95",
+        "--kv-cache-dtype=fp8",
+        "--tensor-parallel-size=1",
+        "--max-num-seqs=16",
+        "--enable-chunked-prefill",
+        "--max-num-batched-tokens=4096",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser=gemma4",
+        "--reasoning-parser=gemma4",
+        "--async-scheduling",
+        "--limit-mm-per-prompt={}",
+        "--trust-remote-code",
+        "--host=0.0.0.0",
+        "--port=8000"
+    ]
+    if cpu_offload_gb > 0:
+        vllm_args.append(f"--cpu-offload-gb={cpu_offload_gb}")
+
+    vllm_args_str = ",".join(vllm_args)
+
     if is_hf:
         cmd.append(f"--set-secrets=HF_TOKEN={HF_SECRET_ID}:latest")
-        cmd.append(
-            f"--args=--model={model_path},--dtype=float16,--quantization={quantization},--safetensors-load-strategy=prefetch,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--trust-remote-code,--host=0.0.0.0,--port=8000"
-        )
+        cmd.append(f"--args={vllm_args_str}")
     else:
         cmd.append(
             f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"
         )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
-        cmd.append(
-            f"--args=--model=/mnt/models/{model_path},--dtype=float16,--quantization={quantization},--safetensors-load-strategy=prefetch,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--trust-remote-code,--host=0.0.0.0,--port=8000"
-        )
+        cmd.append(f"--args={vllm_args_str}")
 
     try:
         result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, check=True)
