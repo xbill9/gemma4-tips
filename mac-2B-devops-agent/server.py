@@ -24,14 +24,18 @@ mcp = FastMCP("Local Gemma 4 SRE Agent")
 MODEL_NAME = os.getenv("MODEL_NAME", "gemma4:e2b")
 LOCAL_DOCKER_IMAGE = os.getenv("LOCAL_DOCKER_IMAGE", "ollama/ollama:latest")
 
+
 def detect_default_port() -> int:
-    if os.getenv("LOCAL_VLLM_PORT"):
-        return int(os.getenv("LOCAL_VLLM_PORT"))
+    port_env = os.getenv("LOCAL_VLLM_PORT")
+    if port_env:
+        return int(port_env)
     import socket
+
     def is_port_open(port: int) -> bool:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.5)
             return s.connect_ex(("127.0.0.1", port)) == 0
+
     if is_port_open(11434):
         return 11434
     if is_port_open(8000):
@@ -40,6 +44,7 @@ def detect_default_port() -> int:
         if os.path.exists(os.path.join(path, "docker")):
             return 8000
     return 11434
+
 
 LOCAL_VLLM_PORT = detect_default_port()
 os.environ["OLLAMA_HOST"] = f"http://127.0.0.1:{LOCAL_VLLM_PORT}"
@@ -67,7 +72,8 @@ async def is_docker_available() -> bool:
     """Checks if Docker is installed and the daemon is running."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "info",
+            "docker",
+            "info",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -192,7 +198,7 @@ async def manage_docker(action: str = "status") -> str:
     logger.info(f"Local deployment mode: Managing Docker with action '{action}'")
     docker_run_cmd = os.getenv(
         "LOCAL_DOCKER_RUN_CMD",
-        f"docker run --name gemma4 -d -p {LOCAL_VLLM_PORT}:11434 --cpuset-cpus=\"0-7\" "
+        f'docker run --name gemma4 -d -p {LOCAL_VLLM_PORT}:11434 --cpuset-cpus="0-7" '
         f"-e OLLAMA_KV_CACHE_TYPE=q4_0 -e OLLAMA_NUM_PARALLEL=1 -e OLLAMA_NUM_THREADS=4 "
         f"-v ollama_local_volume:/root/.ollama {LOCAL_DOCKER_IMAGE}",
     )
@@ -247,7 +253,9 @@ async def get_system_status() -> str:
             if rc == 0 and "ollama" in out:
                 for line in out.splitlines():
                     if "ollama" in line:
-                        docker_status = f"🟢 Running ({line.strip()})" if "started" in line else f"🔴 Stopped ({line.strip()})"
+                        docker_status = (
+                            f"🟢 Running ({line.strip()})" if "started" in line else f"🔴 Stopped ({line.strip()})"
+                        )
             else:
                 docker_status = "🔴 Not Installed/Stopped"
         except Exception as e:
