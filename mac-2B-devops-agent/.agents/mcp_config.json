@@ -3,7 +3,7 @@
     "local-devops-agent": {
       "command": "python3",
       "args": [
-        "/Users/xbill/gemma4-tips/local-2B-devops-agent/server.py"
+        "/Users/xbill/gemma4-tips/mac-2B-devops-agent/server.py"
       ],
       "env": {
         "GOOGLE_CLOUD_PROJECT": "aisprint-491218",
