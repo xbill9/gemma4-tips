@@ -257,6 +257,7 @@ annotations:
   run.googleapis.com/cpu-throttling: "false"  # Mandatory for GPU
   run.googleapis.com/startup-cpu-boost: "true"
   run.googleapis.com/maxScale: "1"
+  run.googleapis.com/minScale: "1"
 container:
   concurrency: 4
   timeout: 3600s
@@ -271,7 +272,7 @@ startupProbe:
 # For gcloud deployment, use:
 # gcloud run deploy {DEFAULT_SERVICE_NAME} --no-cpu-throttling --allow-unauthenticated --concurrency=4 \\
 #   --timeout=3600 --startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=30,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health \\
-#   --max-instances=1 --args=--model=/mnt/models/nvidia/Gemma-4-31B-IT-NVFP4,--dtype=float16,--quantization=nvfp4,--cpu-offload-gb=15,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{"image":0}},--host=0.0.0.0,--port=8000
+#   --max-instances=1 --min-instances=1 --args=--model=/mnt/models/nvidia/Gemma-4-31B-IT-NVFP4,--dtype=float16,--quantization=nvfp4,--cpu-offload-gb=15,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{"image":0}},--host=0.0.0.0,--port=8000
 volumes:
   - name: model-volume
     cloudStorage:
@@ -454,7 +455,7 @@ def get_vllm_deployment_config(
         bucket_name: The GCS bucket containing the model weights.
         model_path: The sub-path inside the bucket (e.g., 'nvidia/Gemma-4-31B-IT-NVFP4') or Hugging Face repo ID.
         allow_unauthenticated: Whether to allow unauthenticated access to the service.
-        min_instances: The minimum number of instances to keep warm (default: 0).
+        min_instances: The minimum number of instances to keep warm (default: 1).
         gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.90).
         cpu_offload_gb: Amount of CPU memory in GiB to allocate for weight offloading. Auto-calculated if None.
     """
@@ -719,13 +720,13 @@ def status_vllm(service_name: str = DEFAULT_SERVICE_NAME) -> str:
 
 
 @mcp.tool()
-def update_vllm_scaling(min_instances: int, max_instances: int, service_name: str = DEFAULT_SERVICE_NAME) -> str:
+def update_vllm_scaling(min_instances: int = 1, max_instances: int = 1, service_name: str = DEFAULT_SERVICE_NAME) -> str:
     """
     Updates the scaling configuration (min and max instances) for the Cloud Run vLLM service.
 
     Args:
-        min_instances: The minimum number of instances to keep warm.
-        max_instances: The maximum number of instances to scale out to.
+        min_instances: The minimum number of instances to keep warm (default: 1).
+        max_instances: The maximum number of instances to scale out to (default: 1).
         service_name: The name of the Cloud Run service to update.
     """
     cmd = [
