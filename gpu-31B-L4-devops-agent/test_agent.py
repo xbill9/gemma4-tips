@@ -90,7 +90,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             cmd,
         )
         self.assertIn(
-            '--args=--model=/mnt/models/test-model,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=lazy,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={"image":0},--trust-remote-code,--host=0.0.0.0,--port=8000',
+            '--args=--model=/mnt/models/test-model,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=lazy,--max-model-len=512,--disable-chunked-mm-input,--gpu-memory-utilization=0.90,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=4,--enforce-eager,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={"image":0},--trust-remote-code,--host=0.0.0.0,--port=8000',
             cmd,
         )
 
@@ -124,7 +124,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             cmd,
         )
         self.assertIn(
-            '--args=--model=google/gemma-4-31B-it,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=lazy,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={"image":0},--trust-remote-code,--host=0.0.0.0,--port=8000,--cpu-offload-gb=15',
+            '--args=--model=google/gemma-4-31B-it,--dtype=float16,--quantization=fp8,--safetensors-load-strategy=lazy,--max-model-len=512,--disable-chunked-mm-input,--gpu-memory-utilization=0.90,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=4,--enforce-eager,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={"image":0},--trust-remote-code,--host=0.0.0.0,--port=8000,--cpu-offload-gb=14',
             cmd,
         )
 

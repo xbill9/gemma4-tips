@@ -3,7 +3,7 @@ PROJECT_ID ?= aisprint-491218
 REGION ?= us-east4
 BUCKET_NAME ?= $(PROJECT_ID)-bucket
 SERVICE_NAME ?= gpu-31b-l4-devops-agent
-MODEL_PATH ?= gemma-4-31B-it
+MODEL_PATH ?= nvidia/Gemma-4-31B-IT-NVFP4
 
 install:
 	pip install -r requirements.txt
@@ -36,19 +36,19 @@ deploy-vllm:
 		--no-cpu-throttling \
 		--concurrency=4 \
 		--timeout=3600 \
-		--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=30,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health \
+		--startup-probe=timeoutSeconds=239,periodSeconds=240,failureThreshold=30,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health \
 		--max-instances=1 \
-		--min-instances=0 \
+		--min-instances=1 \
 		--port=8000 \
 		--memory=32Gi \
 		--cpu=8 \
 		--execution-environment=gen2 \
-		--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true \
+		--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true,mount-options=uid=1001\;gid=1001\;stat-cache-ttl=3600s\;type-cache-ttl=3600s\;max-conns-per-host=100 \
 		--add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-		--args=--model=/mnt/models/$(MODEL_PATH),--dtype=float16,--quantization=fp8,--safetensors-load-strategy=prefetch,--max-model-len=4096,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=16,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt='{"image":0}',--trust-remote-code,--host=0.0.0.0,--port=8000 \
+		--args=--model=/mnt/models/$(MODEL_PATH),--dtype=float16,--quantization=nvfp4,--cpu-offload-gb=14,--safetensors-load-strategy=lazy,--max-model-len=512,--disable-chunked-mm-input,--gpu-memory-utilization=0.90,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=4,--enforce-eager,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt='{"image":0}',--trust-remote-code,--host=0.0.0.0,--port=8000 \
 		--no-allow-unauthenticated \
 		--region=$(REGION) \
-		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1
+		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MALLOC_TRIM_THRESHOLD_=65536,OMP_NUM_THREADS=1,MKL_NUM_THREADS=1
 
 # Deploy the vLLM inference stack
 deploy: deploy-vllm

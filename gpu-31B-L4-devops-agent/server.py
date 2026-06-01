@@ -138,13 +138,59 @@ def get_vllm_url() -> str:
     return _ACTIVE_VLLM_URL
 
 
-def get_auth_token() -> str:
-    """Gets a Google Cloud Identity Token for authenticating to Cloud Run."""
+def get_auth_token(audience: Optional[str] = None) -> str:
+    """Gets a Google Cloud Identity Token for authenticating to Cloud Run, handling audience/impersonation if needed."""
     try:
-        # Use a timeout for the token generation too
+        # Check active account
+        account = (
+            subprocess.check_output(
+                ["gcloud", "config", "get-value", "core/account"], stderr=subprocess.DEVNULL, timeout=5
+            )
+            .decode("utf-8")
+            .strip()
+        )
+
+        cmd = ["gcloud", "auth", "print-identity-token"]
+        if audience:
+            cmd.append(f"--audiences={audience}")
+
+            # If logged in as user, try using default compute service account impersonation for audience support
+            if account and not account.endswith(".gserviceaccount.com"):
+                try:
+                    project_num = (
+                        subprocess.check_output(
+                            ["gcloud", "projects", "describe", PROJECT_ID, "--format=value(projectNumber)"],
+                            stderr=subprocess.DEVNULL,
+                            timeout=5,
+                        )
+                        .decode("utf-8")
+                        .strip()
+                    )
+                    if project_num:
+                        sa = f"{project_num}-compute@developer.gserviceaccount.com"
+                        impersonate_cmd = [
+                            "gcloud",
+                            "auth",
+                            "print-identity-token",
+                            f"--impersonate-service-account={sa}",
+                            f"--audiences={audience}",
+                        ]
+                        token = (
+                            subprocess.check_output(impersonate_cmd, stderr=subprocess.DEVNULL, timeout=10)
+                            .decode("utf-8")
+                            .strip()
+                        )
+                        logger.info(f"🔑 Successfully obtained identity token via impersonation of {sa}")
+                        return token
+                except Exception as impersonate_err:
+                    logger.warning(
+                        f"⚠️ Service account impersonation failed: {str(impersonate_err)}. Falling back to direct token generation."
+                    )
+
+        # Fallback to direct token print
         return (
             subprocess.check_output(
-                ["gcloud", "auth", "print-identity-token"],
+                cmd,
                 stderr=subprocess.DEVNULL,
                 timeout=10,
             )
@@ -159,7 +205,7 @@ def get_auth_token() -> str:
 async def get_vllm_client() -> AsyncOpenAI:
     """Initializes and returns an AsyncOpenAI client for the Cloud Run vLLM service."""
     vllm_url = get_vllm_url()
-    token = get_auth_token()
+    token = get_auth_token(audience=vllm_url)
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -396,7 +442,7 @@ def get_vllm_deployment_config(
     bucket_name: str = BUCKET_NAME,
     model_path: str = "nvidia/Gemma-4-31B-IT-NVFP4",
     allow_unauthenticated: bool = False,
-    min_instances: int = 0,
+    min_instances: int = 1,
     gpu_memory_utilization: float = 0.95,
     cpu_offload_gb: Optional[int] = None,
 ) -> str:
@@ -409,7 +455,7 @@ def get_vllm_deployment_config(
         model_path: The sub-path inside the bucket (e.g., 'nvidia/Gemma-4-31B-IT-NVFP4') or Hugging Face repo ID.
         allow_unauthenticated: Whether to allow unauthenticated access to the service.
         min_instances: The minimum number of instances to keep warm (default: 0).
-        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.95).
+        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.90).
         cpu_offload_gb: Amount of CPU memory in GiB to allocate for weight offloading. Auto-calculated if None.
     """
     # Check if we are pulling directly from Hugging Face
@@ -435,7 +481,7 @@ def get_vllm_deployment_config(
     # Auto-calculate cpu_offload_gb if None and loading a 31B model on 24GB L4 GPU
     if cpu_offload_gb is None:
         if "31b" in model_path.lower():
-            cpu_offload_gb = 15
+            cpu_offload_gb = 11
         else:
             cpu_offload_gb = 0
 
@@ -457,7 +503,7 @@ def get_vllm_deployment_config(
         "--memory=32Gi",
         "--cpu=8",
         "--execution-environment=gen2",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MALLOC_TRIM_THRESHOLD_=65536,OMP_NUM_THREADS=1,MKL_NUM_THREADS=1",
     ]
 
     # Build vLLM arguments
@@ -465,13 +511,14 @@ def get_vllm_deployment_config(
         f"--model={model_path if is_hf else f'/mnt/models/{model_path}'}",
         "--dtype=float16",
         f"--quantization={quantization}",
-        "--safetensors-load-strategy=lazy",
-        "--max-model-len=4096",
+        "--safetensors-load-strategy=eager",
+        "--max-model-len=512",
         "--disable-chunked-mm-input",
         f"--gpu-memory-utilization={gpu_memory_utilization}",
         "--kv-cache-dtype=fp8",
         "--tensor-parallel-size=1",
-        "--max-num-seqs=16",
+        "--max-num-seqs=4",
+        "--enforce-eager",
         "--enable-chunked-prefill",
         "--max-num-batched-tokens=4096",
         "--enable-auto-tool-choice",
@@ -542,7 +589,7 @@ async def deploy_vllm(
     # Auto-calculate cpu_offload_gb if None and loading a 31B model on 24GB L4 GPU
     if cpu_offload_gb is None:
         if "31b" in model_path.lower():
-            cpu_offload_gb = 15
+            cpu_offload_gb = 14
         else:
             cpu_offload_gb = 0
 
@@ -563,14 +610,14 @@ async def deploy_vllm(
         "--timeout=3600",
         "--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=60,initialDelaySeconds=240,httpGet.port=8000,httpGet.path=/health",
         "--max-instances=1",
-        "--min-instances=0",
+        "--min-instances=1",
         "--port=8000",
         "--memory=32Gi",
         "--cpu=8",
         "--execution-environment=gen2",
         "--no-allow-unauthenticated",
         f"--region={LOCATION}",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MALLOC_TRIM_THRESHOLD_=65536,OMP_NUM_THREADS=1,MKL_NUM_THREADS=1",
     ]
 
     # Build vLLM arguments
@@ -579,12 +626,13 @@ async def deploy_vllm(
         "--dtype=float16",
         f"--quantization={quantization}",
         "--safetensors-load-strategy=lazy",
-        "--max-model-len=4096",
+        "--max-model-len=512",
         "--disable-chunked-mm-input",
-        "--gpu-memory-utilization=0.95",
+        "--gpu-memory-utilization=0.90",
         "--kv-cache-dtype=fp8",
         "--tensor-parallel-size=1",
-        "--max-num-seqs=16",
+        "--max-num-seqs=4",
+        "--enforce-eager",
         "--enable-chunked-prefill",
         "--max-num-batched-tokens=4096",
         "--enable-auto-tool-choice",
@@ -1048,7 +1096,7 @@ async def get_model_details() -> str:
             report += f"❌ Error fetching model details via client: {e}\n\n"
 
         # 2. Get Health Status
-        token = get_auth_token()
+        token = get_auth_token(audience=vllm_url)
         headers = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -1080,7 +1128,7 @@ async def get_system_status(service_name: str = DEFAULT_SERVICE_NAME) -> str:
     url = None
     try:
         url = get_vllm_url()
-        token = get_auth_token()
+        token = get_auth_token(audience=url)
         headers = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -1146,7 +1194,7 @@ async def get_endpoint(service_name: str = DEFAULT_SERVICE_NAME) -> str:
     """
     try:
         url = get_vllm_url()
-        token = get_auth_token()
+        token = get_auth_token(audience=url)
         headers = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -1180,7 +1228,7 @@ async def run_benchmark(
 
     try:
         url = get_vllm_url()
-        token = get_auth_token()
+        token = get_auth_token(audience=url)
     except Exception as e:
         return f"❌ Cannot run benchmark: {e}"
 
