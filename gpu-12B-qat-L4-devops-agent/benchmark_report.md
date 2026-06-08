@@ -1,6 +1,6 @@
 # 📊 Gemma 4 serving Performance Benchmark
 
-This report details the throughput and latency characteristics of the Gemma 4 (E4B-it) model deployed on a Cloud Run instance configured with an NVIDIA L4 GPU in the `us-east4` region.
+This report details the throughput and latency characteristics of the Gemma 4 (12B-it-qat-w4a16-ct) model deployed on a Cloud Run instance configured with an NVIDIA L4 GPU in the `us-east4` region.
 
 ## 📈 Performance Visualizations
 

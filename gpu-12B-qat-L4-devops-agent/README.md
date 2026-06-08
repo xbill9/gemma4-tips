@@ -11,7 +11,7 @@ The MCP server expects a running vLLM instance. Your Cloud Run deployment for th
 *   **Hardware:** NVIDIA L4 GPU (1 unit).
 *   **Compute:** Minimum 4 vCPUs and 16GiB RAM.
 *   **Execution Environment:** `gen2` (required for GPU and GCS FUSE).
-*   **Storage:** A GCS Bucket containing the Gemma model weights (e.g., `gs://PROJECT_ID-bucket/gemma-4-E4B-it-qat-w4a16-ct/`).
+*   **Storage:** A GCS Bucket containing the Gemma model weights (e.g., `gs://PROJECT_ID-bucket/gemma-4-12B-it-qat-w4a16-ct/`).
 *   **Networking:** Private Google Access must be enabled on the VPC subnet if using GCS FUSE.
 
 ### 2. Software & API Dependencies
@@ -27,7 +27,7 @@ You can configure the following variables for the MCP server:
 *   `GOOGLE_CLOUD_PROJECT`: Your GCP Project ID (defaults to `aisprint-491218`).
 *   `GOOGLE_CLOUD_LOCATION`: The region for Vertex AI (defaults to `us-east4`).
 *   `VLLM_BASE_URL`: The URL of your Cloud Run vLLM service. **If omitted, the agent will attempt to auto-discover it using `gcloud`.**
-*   `MODEL_NAME`: The model identifier used by vLLM (defaults to `google/gemma-4-E4B-it-qat-w4a16-ct`).
+*   `MODEL_NAME`: The model identifier used by vLLM (defaults to `google/gemma-4-12B-it-qat-w4a16-ct`).
 
 ## 🛠 Usage & Setup
 

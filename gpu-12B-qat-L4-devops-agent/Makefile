@@ -2,8 +2,8 @@
 PROJECT_ID ?= aisprint-491218
 REGION ?= us-east4
 BUCKET_NAME ?= $(PROJECT_ID)-bucket
-SERVICE_NAME ?= gpu-4b-l4-devops-agent
-MODEL_PATH ?= gemma-4-E4B-it-qat-w4a16-ct
+SERVICE_NAME ?= gpu-12b-qat-l4-devops-agent
+MODEL_PATH ?= gemma-4-12B-it-qat-w4a16-ct
 
 install:
 	pip install -r requirements.txt
@@ -45,10 +45,10 @@ deploy-vllm:
 		--execution-environment=gen2 \
 		--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true \
 		--add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-		--args=--model=/mnt/models/$(MODEL_PATH),--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000 \
+		--args=--model=/mnt/models/$(MODEL_PATH),--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000 \
 		--no-allow-unauthenticated \
 		--region=$(REGION) \
-		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1
+		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLED_KERNELS=MarlinLinearKernel,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536
 
 # Deploy the vLLM inference stack
 deploy: deploy-vllm

@@ -31,7 +31,7 @@ LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-east4")
 BUCKET_NAME = f"{PROJECT_ID}-bucket"
 # The URL of the self-hosted vLLM service on Cloud Run
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL")
-MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-E4B-it-qat-w4a16-ct")
+MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-12B-it-qat-w4a16-ct")
 HF_SECRET_ID = "hf-token"
 
 
@@ -74,7 +74,7 @@ async def save_hf_token(token: str) -> str:
     return f"✅ Token saved. Version: {response.name}"
 
 
-DEFAULT_SERVICE_NAME = "gpu-4b-l4-devops-agent"
+DEFAULT_SERVICE_NAME = "gpu-12b-qat-l4-devops-agent"
 
 
 def discover_vllm_url(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]:
@@ -225,7 +225,7 @@ startupProbe:
 # For gcloud deployment, use:
 # gcloud run deploy {DEFAULT_SERVICE_NAME} --no-cpu-throttling --allow-unauthenticated --concurrency=4 \\
 #   --timeout=3600 --startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=10,initialDelaySeconds=180,httpGet.port=8000,httpGet.path=/health \\
-#   --max-instances=1 --args=--model=/mnt/models/gemma-4-E4B-it-qat-w4a16-ct,--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000
+#   --max-instances=1 --args=--model=/mnt/models/gemma-4-12B-it-qat-w4a16-ct,--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000
 volumes:
   - name: model-volume
     cloudStorage:
@@ -240,7 +240,7 @@ def get_vllm_endpoint(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]
     Returns the current active vLLM endpoint URL.
 
     Args:
-        service_name: The Cloud Run service name to describe (defaults to 'gpu-4b-l4-devops-agent').
+        service_name: The Cloud Run service name to describe (defaults to 'gpu-12b-qat-l4-devops-agent').
     """
     # If it's the default service, use our cached discovery logic
     if service_name == DEFAULT_SERVICE_NAME:
@@ -394,7 +394,7 @@ async def query_vllm(prompt: str, max_tokens: int = 512, temperature: float = 0.
 def get_vllm_deployment_config(
     service_name: str = DEFAULT_SERVICE_NAME,
     bucket_name: str = BUCKET_NAME,
-    model_path: str = "gemma-4-E4B-it-qat-w4a16-ct",
+    model_path: str = "gemma-4-12B-it-qat-w4a16-ct",
     allow_unauthenticated: bool = False,
     min_instances: int = 0,
     gpu_memory_utilization: float = 0.95,
@@ -405,7 +405,7 @@ def get_vllm_deployment_config(
     Args:
         service_name: The name for the Cloud Run service.
         bucket_name: The GCS bucket containing the model weights.
-        model_path: The sub-path inside the bucket (e.g., 'gemma-4-E4B-it-qat-w4a16-ct') or Hugging Face repo ID.
+        model_path: The sub-path inside the bucket (e.g., 'gemma-4-12B-it-qat-w4a16-ct') or Hugging Face repo ID.
         allow_unauthenticated: Whether to allow unauthenticated access to the service.
         min_instances: The minimum number of instances to keep warm (default: 0).
         gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.95).
@@ -431,13 +431,13 @@ def get_vllm_deployment_config(
         "--memory=32Gi",
         "--cpu=8",
         "--execution-environment=gen2",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLED_KERNELS=MarlinLinearKernel,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
     if is_hf:
         command.append("--set-secrets=HF_TOKEN=hf-token:latest")
         command.append(
-            f"--args=--model={model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
+            f"--args=--model={model_path},--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
     else:
         command.append(
@@ -445,7 +445,7 @@ def get_vllm_deployment_config(
         )
         command.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         command.append(
-            f"--args=--model=/mnt/models/{model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
+            f"--args=--model=/mnt/models/{model_path},--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
 
     command.append("--allow-unauthenticated" if allow_unauthenticated else "--no-allow-unauthenticated")
@@ -457,7 +457,7 @@ def get_vllm_deployment_config(
 @mcp.tool()
 async def deploy_vllm(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "gemma-4-E4B-it-qat-w4a16-ct",
+    model_path: str = "gemma-4-12B-it-qat-w4a16-ct",
     bucket_name: str = BUCKET_NAME,
 ) -> str:
     """
@@ -494,13 +494,13 @@ async def deploy_vllm(
         "--execution-environment=gen2",
         "--no-allow-unauthenticated",
         f"--region={LOCATION}",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLED_KERNELS=MarlinLinearKernel,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
     if is_hf:
         cmd.append("--set-secrets=HF_TOKEN=hf-token:latest")
         cmd.append(
-            f"--args=--model={model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
+            f"--args=--model={model_path},--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
     else:
         cmd.append(
@@ -508,7 +508,7 @@ async def deploy_vllm(
         )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         cmd.append(
-            f"--args=--model=/mnt/models/{model_path},--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
+            f"--args=--model=/mnt/models/{model_path},--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8000"
         )
 
     try:
@@ -688,7 +688,7 @@ spec:
 
 
 @mcp.tool()
-def get_vertex_ai_model_copy_instructions(model_name: str = "gemma-4-E4B-it-qat-w4a16-ct") -> str:
+def get_vertex_ai_model_copy_instructions(model_name: str = "gemma-4-12B-it-qat-w4a16-ct") -> str:
     """
     Provides instructions and commands to transfer Gemma model artifacts from Vertex AI Model Garden to your GCS bucket.
     """
@@ -714,7 +714,7 @@ Once the artifacts are in your bucket, use `get_vllm_deployment_config` to gener
 
 @mcp.tool()
 async def get_huggingfacehub_download_path(
-    repo_id: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
+    repo_id: str = "google/gemma-4-12B-it-qat-w4a16-ct",
 ) -> str:
     """
     Returns the local cache path for a Hugging Face model using huggingface_hub.
@@ -733,14 +733,14 @@ async def get_huggingfacehub_download_path(
 
 @mcp.tool()
 def get_huggingface_model_copy_instructions(
-    repo_id: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
+    repo_id: str = "google/gemma-4-12B-it-qat-w4a16-ct",
     bucket_name: str = BUCKET_NAME,
 ) -> str:
     """
     Provides instructions and commands to transfer Gemma model weights from Hugging Face to your GCS bucket.
 
     Args:
-        repo_id: The Hugging Face repo ID (e.g., 'google/gemma-4-E4B-it-qat-w4a16-ct').
+        repo_id: The Hugging Face repo ID (e.g., 'google/gemma-4-12B-it-qat-w4a16-ct').
         bucket_name: The target GCS bucket name.
     """
     model_name = repo_id.split("/")[-1]

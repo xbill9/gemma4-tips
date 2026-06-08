@@ -1,20 +1,20 @@
-# Deployment Guide: Self-Hosted vLLM on Cloud Run (Gemma 4 4B-it)
+# Deployment Guide: Self-Hosted vLLM on Cloud Run (Gemma 4 12B-it)
 
 This document summarizes the deployment state and configuration for the vLLM inference server used by the DevOps Agent.
 
 ## 📦 Model Artifacts
-The model was extracted from `gemma-4-E4B-it-qat-w4a16-ct.tar.gz` and uploaded to Google Cloud Storage.
+The model was extracted from `gemma-4-12B-it-qat-w4a16-ct.tar.gz` and uploaded to Google Cloud Storage.
 
 
 *   **Bucket:** `gs://aisprint-491218-bucket/`
-*   **Path:** `gemma-4-E4B-it-qat-w4a16-ct/`
+*   **Path:** `gemma-4-12B-it-qat-w4a16-ct/`
 *   **Format:** Hugging Face Transformers (Safetensors)
 
 ## 🚀 Inference Stack (vLLM)
 The inference server is deployed on Cloud Run with GPU acceleration and GCS FUSE.
 
-*   **Service Name:** `gpu-4b-l4-devops-agent`
-*   **Service URL:** `https://gpu-4b-l4-devops-agent-289270257791.us-east4.run.app`
+*   **Service Name:** `gpu-12b-qat-l4-devops-agent`
+*   **Service URL:** `https://gpu-12b-qat-l4-devops-agent-289270257791.us-east4.run.app`
 *   **Region:** `us-east4`
 *   **Hardware:** 
     *   **GPU:** 1x NVIDIA L4
@@ -30,8 +30,8 @@ The inference server is deployed on Cloud Run with GPU acceleration and GCS FUSE
 To connect the MCP Agent to this service, export the following environment variables:
 
 ```bash
-export VLLM_BASE_URL="https://gpu-4b-l4-devops-agent-289270257791.us-east4.run.app"
-export MODEL_NAME="/mnt/models/gemma-4-E4B-it-qat-w4a16-ct"
+export VLLM_BASE_URL="https://gpu-12b-qat-l4-devops-agent-289270257791.us-east4.run.app"
+export MODEL_NAME="/mnt/models/gemma-4-12B-it-qat-w4a16-ct"
 export GOOGLE_CLOUD_PROJECT="aisprint-491218"
 ```
 
@@ -42,7 +42,7 @@ make run
 
 ## 📜 Deployment Command (Reference)
 ```bash
-gcloud beta run deploy gpu-4b-l4-devops-agent \
+gcloud beta run deploy gpu-12b-qat-l4-devops-agent \
   --image=vllm/vllm-openai:latest \
   --gpu=1 \
   --gpu-type=nvidia-l4 \
@@ -51,9 +51,10 @@ gcloud beta run deploy gpu-4b-l4-devops-agent \
   --execution-environment=gen2 \
   --add-volume=name=model-volume,type=cloud-storage,bucket=aisprint-491218-bucket,readonly=true \
   --add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-  --args=--model=/mnt/models/gemma-4-E4B-it-qat-w4a16-ct,--max-model-len=4096,--port=8080 \
+  --args=--model=/mnt/models/gemma-4-12B-it-qat-w4a16-ct,--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080 \
   --no-allow-unauthenticated \
   --region=us-east4 \
   --no-gpu-zonal-redundancy \
+  --set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLED_KERNELS=MarlinLinearKernel,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536 \
   --timeout=3600
 ```

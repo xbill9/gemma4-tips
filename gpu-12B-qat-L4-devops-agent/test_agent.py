@@ -90,7 +90,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             cmd,
         )
         self.assertIn(
-            "--args=--model=/mnt/models/test-model,--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
+            "--args=--model=/mnt/models/test-model,--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
             cmd,
         )
 
@@ -106,7 +106,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
 
         result = await deploy_vllm(
             service_name="test-service",
-            model_path="google/gemma-4-E4B-it-qat-w4a16-ct",
+            model_path="google/gemma-4-12B-it-qat-w4a16-ct",
             bucket_name="test-bucket",
         )
 
@@ -123,7 +123,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             cmd,
         )
         self.assertIn(
-            "--args=--model=google/gemma-4-E4B-it-qat-w4a16-ct,--dtype=bfloat16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
+            "--args=--model=google/gemma-4-12B-it-qat-w4a16-ct,--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
             cmd,
         )
 
@@ -201,8 +201,8 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         """Test the output of the Vertex AI model copy instructions tool."""
         from server import get_vertex_ai_model_copy_instructions
 
-        instructions = get_vertex_ai_model_copy_instructions("gemma-4-E4B-it-qat-w4a16-ct")
-        self.assertIn("gemma-4-E4B-it-qat-w4a16-ct", instructions)
+        instructions = get_vertex_ai_model_copy_instructions("gemma-4-12B-it-qat-w4a16-ct")
+        self.assertIn("gemma-4-12B-it-qat-w4a16-ct", instructions)
         self.assertIn("Vertex AI Model Garden", instructions)
         self.assertIn("gcloud storage cp", instructions)
 
@@ -214,14 +214,14 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         # Setup mock behavior
         mock_bucket = MagicMock()
         mock_blob = MagicMock()
-        mock_blob.name = "gemma-4-E4B-it-qat-w4a16-ct/config.json"
+        mock_blob.name = "gemma-4-12B-it-qat-w4a16-ct/config.json"
         mock_blob.size = 1024 * 1024 * 5  # 5 MB
         mock_bucket.list_blobs.return_value = [mock_blob]
         mock_storage_client.return_value.bucket.return_value = mock_bucket
 
         result = list_bucket_models("mock-bucket")
         self.assertIn("mock-bucket", result)
-        self.assertIn("gemma-4-E4B-it-qat-w4a16-ct/config.json", result)
+        self.assertIn("gemma-4-12B-it-qat-w4a16-ct/config.json", result)
         self.assertIn("5.00 MB", result)
 
     @patch("server.secretmanager.SecretManagerServiceClient")

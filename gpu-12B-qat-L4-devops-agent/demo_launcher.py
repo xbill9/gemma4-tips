@@ -30,14 +30,14 @@ async def devops_demo():
 
     # Step 3: Deployment Config & Vertex AI instructions
     print("\n[Step 3] Vertex AI Model Garden Instructions...")
-    instructions = get_vertex_ai_model_copy_instructions(model_name="gemma-4-E4B-it-qat-w4a16-ct")
+    instructions = get_vertex_ai_model_copy_instructions(model_name="gemma-4-12B-it-qat-w4a16-ct")
     print(instructions)
 
     print("\n[Step 4] Generating Cloud Run GPU Deployment Config (with GCS FUSE)...")
     config = get_vllm_deployment_config(
         service_name="vllm-sre-agent",
         bucket_name="my-gemma-bucket",
-        model_path="gemma-4-E4B-it-qat-w4a16-ct",
+        model_path="gemma-4-12B-it-qat-w4a16-ct",
     )
     print(f"  COMMAND: {config}")
 
