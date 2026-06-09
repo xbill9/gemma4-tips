@@ -22,7 +22,7 @@ The inference server is deployed on Cloud Run with GPU acceleration and GCS FUSE
     *   **Memory:** 16GiB
 *   **Configuration:**
     *   **Container Port:** `8080`
-    *   **Max Model Length:** `4096`
+    *   **Max Model Length:** `32768`
     *   **Storage:** GCS FUSE mounted at `/mnt/models`
     *   **Zonal Redundancy:** Disabled (`--no-gpu-zonal-redundancy`)
 
@@ -43,7 +43,7 @@ make run
 ## 📜 Deployment Command (Reference)
 ```bash
 gcloud beta run deploy gpu-12b-qat-l4-devops-agent \
-  --image=vllm/vllm-openai:latest \
+  --image=vllm/vllm-openai:nightly \
   --gpu=1 \
   --gpu-type=nvidia-l4 \
   --memory=16Gi \
@@ -51,10 +51,10 @@ gcloud beta run deploy gpu-12b-qat-l4-devops-agent \
   --execution-environment=gen2 \
   --add-volume=name=model-volume,type=cloud-storage,bucket=aisprint-491218-bucket,readonly=true \
   --add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-  --args=--model=/mnt/models/gemma-4-12B-it-qat-w4a16-ct,--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080 \
+  --args=--model=/mnt/models/gemma-4-12B-it-qat-w4a16-ct,--quantization=compressed-tensors,--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080 \
   --no-allow-unauthenticated \
   --region=us-east4 \
   --no-gpu-zonal-redundancy \
-  --set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLED_KERNELS=MarlinLinearKernel,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536 \
+  --set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536 \
   --timeout=3600
 ```

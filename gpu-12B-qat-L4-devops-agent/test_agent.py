@@ -84,13 +84,13 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cmd[2], "run")
         self.assertEqual(cmd[3], "deploy")
         self.assertEqual(cmd[4], "test-service")
-        self.assertIn("--image=vllm/vllm-openai:latest", cmd)
+        self.assertIn("--image=vllm/vllm-openai:nightly", cmd)
         self.assertIn(
             "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options=uid=1001;gid=1001",
             cmd,
         )
         self.assertIn(
-            "--args=--model=/mnt/models/test-model,--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
+            "--args=--model=/mnt/models/test-model,--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080",
             cmd,
         )
 
@@ -123,7 +123,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             cmd,
         )
         self.assertIn(
-            "--args=--model=google/gemma-4-12B-it-qat-w4a16-ct,--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000",
+            "--args=--model=google/gemma-4-12B-it-qat-w4a16-ct,--quantization=compressed-tensors,--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080",
             cmd,
         )
 

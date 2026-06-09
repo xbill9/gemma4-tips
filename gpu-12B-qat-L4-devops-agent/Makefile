@@ -29,26 +29,26 @@ deploy-vllm:
 	@echo "🚀 Deploying vLLM to Cloud Run ($(SERVICE_NAME)) in $(REGION)..."
 	gcloud beta run deploy $(SERVICE_NAME) \
 		--project=$(PROJECT_ID) \
-		--image=vllm/vllm-openai:latest \
+		--image=vllm/vllm-openai:nightly \
 		--gpu=1 \
 		--gpu-type=nvidia-l4 \
 		--no-gpu-zonal-redundancy \
 		--no-cpu-throttling \
 		--concurrency=4 \
 		--timeout=3600 \
-		--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=10,initialDelaySeconds=180,httpGet.port=8000,httpGet.path=/health \
+		--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=10,initialDelaySeconds=180,httpGet.port=8080,httpGet.path=/health \
 		--max-instances=1 \
 		--min-instances=0 \
-		--port=8000 \
-		--memory=32Gi \
-		--cpu=8 \
+		--port=8080 \
+		--memory=16Gi \
+		--cpu=4 \
 		--execution-environment=gen2 \
 		--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true \
 		--add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-		--args=--model=/mnt/models/$(MODEL_PATH),--dtype=float16,--max-model-len=16384,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=nvfp4,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8000 \
+		--args=--model=/mnt/models/$(MODEL_PATH),--quantization=compressed-tensors,--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080 \
 		--no-allow-unauthenticated \
 		--region=$(REGION) \
-		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLED_KERNELS=MarlinLinearKernel,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536
+		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536
 
 # Deploy the vLLM inference stack
 deploy: deploy-vllm

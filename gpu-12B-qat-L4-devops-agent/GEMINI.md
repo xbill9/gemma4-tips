@@ -1,4 +1,4 @@
-# 🤖 Gemini Workspace Context: GPU vLLM DevOps Agent
+# 🤖 Gemini Workspace Context: GPU 12B QAT L4 DevOps Agent
 
 This context guide summarizes the configuration, optimal serving parameters, and capabilities of the self-hosted **Gemma 4 DevOps/SRE Agent** running on **Cloud Run GPU** (NVIDIA L4).
 
@@ -13,15 +13,31 @@ This agent targets Google Cloud Platform (GCP) deployments utilizing:
 - **GPU Accelerator**: NVIDIA L4 GPU (1 unit) on Cloud Run Gen2
 - **Default Cloud Run Service Name**: `gpu-12b-qat-l4-devops-agent`
 
-To serve google/gemma-4-12B-it-qat-w4a16-ct using vLLM, you must use the ⁠vLLM GitHub Recipes repository or vLLM nightly/source builds. Native support for this compressed-tensors (-ct) ⁠Google AI for Developers checkpoint requires specific execution parameters.🚀 Serving CommandRun the server using the native compressed-tensors quantization flag:bashvllm serve google/gemma-4-12B-it-qat-w4a16-ct \
+To serve `google/gemma-4-12B-it-qat-w4a16-ct` using vLLM, you must use the vLLM GitHub Recipes repository or vLLM nightly/source builds. Native support for this compressed-tensors (-ct) Google AI for Developers checkpoint requires specific execution parameters.
+
+### 🚀 Serving Command
+
+Run the server using the native compressed-tensors quantization flag:
+
+```bash
+vllm serve google/gemma-4-12B-it-qat-w4a16-ct \
     --quantization compressed_tensors \
-    --max-model-len 131072 \
+    --max-model-len 32768 \
     --tensor-parallel-size 1
-Use code with caution.⚙️ Key vLLM Options & FlagsFlagRecommended SettingPurpose--quantizationcompressed_tensorsMandatory for reading the w4a16 ct serialization format.--max-model-len131072 (or up to 256000)Caps the KV-cache allocation. Pinning this tightly reserves VRAM.--tensor-parallel-size1Fits easily onto a single high-end consumer or datacenter GPU (requires approx. 7 GB VRAM).--enforce-eager(Optional)Add if you encounter shape mismatches in Marlin GEMM kernels during the initial forward pass.
+```
 
-https://github.com/vllm-project/recipes/blob/main/Google/Gemma4.md
+### ⚙️ Key vLLM Options & Flags
 
-https://ai.google.dev/gemma/docs/core
+| Flag | Recommended Setting | Purpose |
+| :--- | :--- | :--- |
+| `--quantization` | `compressed_tensors` | Mandatory for reading the w4a16 ct serialization format. |
+| `--max-model-len` | `32768` (or up to `256000`) | Caps the KV-cache allocation. Pinning this tightly reserves VRAM. |
+| `--tensor-parallel-size` | `1` | Fits easily onto a single high-end consumer or datacenter GPU (requires approx. 7 GB VRAM). |
+| `--enforce-eager` | *(Optional)* | Add if you encounter shape mismatches in Marlin GEMM kernels during the initial forward pass. |
+
+For more details, see:
+* [vLLM Google Gemma 4 Recipe](https://github.com/vllm-project/recipes/blob/main/Google/Gemma4.md)
+* [Google AI Core Gemma Docs](https://ai.google.dev/gemma/docs/core)
 
 ---
 
@@ -83,7 +99,7 @@ args:
   - --host
   - 0.0.0.0
   - --port
-  - "8000"
+  - "8080"
 ```
 
 ### Key Parameters Explained
@@ -98,11 +114,37 @@ args:
 ## 🧰 Key SRE & DevOps Capabilities
 
 This agent exposes several tool categories via the Model Context Protocol (MCP):
-- **Deployment & Scaling:** `deploy_vllm`, `destroy_vllm`, `status_vllm`, `update_vllm_scaling`, `get_vllm_deployment_config`, `get_vllm_gpu_deployment_config`, `check_gpu_quotas`, `get_vllm_endpoint`.
-- **Model Transfer & Secret Management:** `list_vertex_models`, `list_bucket_models`, `save_hf_token`, `get_vertex_ai_model_copy_instructions`, `get_huggingface_model_copy_instructions`, `get_huggingfacehub_download_path`.
-- **System Monitoring & Health:** `get_system_status`, `get_endpoint`, `get_model_details`, `verify_model_health`.
-- **Performance Benchmarking:** `run_benchmark` (supports custom concurrency and request count sweeps).
-- **Diagnostics & SRE Remediation:** `query_gemma4`, `query_gemma4_with_stats`, `query_vllm`, `analyze_cloud_logging`, `analyze_gpu_logs`, `suggest_sre_remediation`, `get_help`.
+- **Deployment & Scaling:** 
+  - [deploy_vllm](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L459)
+  - [destroy_vllm](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L524)
+  - [status_vllm](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L550)
+  - [update_vllm_scaling](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L576)
+  - [get_vllm_deployment_config](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L393)
+  - [get_vllm_gpu_deployment_config](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L606)
+  - [check_gpu_quotas](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L783)
+  - [get_vllm_endpoint](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L237)
+- **Model Transfer & Secret Management:** 
+  - [list_vertex_models](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L251)
+  - [list_bucket_models](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L267)
+  - [save_hf_token](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L49)
+  - [get_vertex_ai_model_copy_instructions](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L693)
+  - [get_huggingface_model_copy_instructions](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L737)
+  - [get_huggingfacehub_download_path](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L718)
+- **System Monitoring & Health:** 
+  - [get_system_status](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L974)
+  - [get_endpoint](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L1042)
+  - [get_model_details](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L935)
+  - [verify_model_health](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L824)
+- **Performance Benchmarking:** 
+  - [run_benchmark](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L1066)
+- **Diagnostics & SRE Remediation:** 
+  - [query_gemma4](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L853)
+  - [query_gemma4_with_stats](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L872)
+  - [query_vllm](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L368)
+  - [analyze_cloud_logging](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L297)
+  - [analyze_gpu_logs](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L1215)
+  - [suggest_sre_remediation](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L343)
+  - [get_help](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py#L1228)
 
 ---
 
@@ -126,7 +168,7 @@ make run
 ---
 
 ## 📚 Key Source Code File Locations
-- **MCP Server entrypoint**: [server.py](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py)
-- **Deployment Manifests & Logic**: Generated by `get_vllm_deployment_config` and `get_vllm_gpu_deployment_config` in [server.py](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/server.py).
-- **Test Suite**: [test_agent.py](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/test_agent.py)
-- **Standalone Grand Demo**: [demo_launcher.py](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/demo_launcher.py)
+- **MCP Server entrypoint**: [server.py](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py)
+- **Deployment Manifests & Logic**: Generated by `get_vllm_deployment_config` and `get_vllm_gpu_deployment_config` in [server.py](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/server.py).
+- **Test Suite**: [test_agent.py](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/test_agent.py)
+- **Standalone Grand Demo**: [demo_launcher.py](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/demo_launcher.py)
