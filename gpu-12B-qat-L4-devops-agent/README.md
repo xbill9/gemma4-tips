@@ -40,6 +40,12 @@ Run the `get_vllm_deployment_config` tool within the MCP server to generate the 
 make deploy
 ```
 
+> [!IMPORTANT]
+> **Critical Deployment Configurations:**
+> *   **GCS FUSE Mount Permissions:** The official `vllm/vllm-openai:nightly` container runs as a non-root user (`vllm` / UID `1001`). If you mount a GCS bucket via FUSE, you **must** specify `mount-options=uid=1001;gid=1001` on the volume definition. Otherwise, the vLLM process will fail to start due to `Permission Denied` when reading the model weights.
+> *   **No CPU Throttling:** Cloud Run requires `--no-cpu-throttling` (CPU is always allocated) for GPU workloads to coordinate compute resources and avoid severe startup/execution timeouts.
+> *   **Numeric Stability (`--dtype=bfloat16`):** Gemma 4 models are natively trained and optimized in `bfloat16`. Running them with standard `float16` (FP16) can lead to numerical overflow/underflow, resulting in garbled outputs or tool-calling errors. The NVIDIA L4 GPU natively accelerates `bfloat16` operations via its Tensor Cores.
+
 ### Step 3: Run the MCP Server
 Install dependencies and run the server:
 ```bash
@@ -91,6 +97,13 @@ The following tools are available via the MCP server:
 ## 📦 Resources
 The server exposes the following MCP resources:
 *   **`config://vllm-deployment-template`**: A YAML template for Cloud Run GPU deployment.
+
+## 📊 Performance Benchmarks (Standard vs. QAT)
+
+The self-hosted **Gemma 4 12B QAT** model has been benchmarked on a single **NVIDIA L4 GPU** (Cloud Run Gen2) to measure concurrency limits:
+* **High Concurrency Stability**: The QAT INT4 model maintains a **100% request success rate** up to **512 concurrent users** (with context windows up to 2048 tokens).
+* **The QAT Advantage**: The standard 12B model (bfloat16) leaves 0 GB of free VRAM for the KV cache on a single L4 GPU, failing at concurrencies above 8. The QAT model (w4a16) frees up **~18 GB of VRAM** for the KV cache, representing a **~64x improvement in concurrency capacity**.
+* Detailed matrix results and SRE insights are available in [benchmark_report_summary.md](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/benchmark_report_summary.md).
 
 ## 🌟 Grand Demo
 A standalone demo script is included to showcase the agent's capabilities:

@@ -225,7 +225,7 @@ startupProbe:
 # For gcloud deployment, use:
 # gcloud run deploy {DEFAULT_SERVICE_NAME} --no-cpu-throttling --allow-unauthenticated --concurrency=4 \\
 #   --timeout=3600 --startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=10,initialDelaySeconds=180,httpGet.port=8080,httpGet.path=/health \\
-#   --max-instances=1 --args=--model=/mnt/models/gemma-4-12B-it-qat-w4a16-ct,--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080
+#   --max-instances=1 --args=--model=/mnt/models/gemma-4-12B-it-qat-w4a16-ct,--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080
 volumes:
   - name: model-volume
     cloudStorage:
@@ -431,7 +431,7 @@ def get_vllm_deployment_config(
         "--memory=16Gi",
         "--cpu=4",
         "--execution-environment=gen2",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
     quant_arg = ",--quantization=compressed-tensors" if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]) else ""
@@ -439,7 +439,7 @@ def get_vllm_deployment_config(
     if is_hf:
         command.append("--set-secrets=HF_TOKEN=hf-token:latest")
         command.append(
-            f"--args=--model={model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model={model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
     else:
         command.append(
@@ -447,7 +447,7 @@ def get_vllm_deployment_config(
         )
         command.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         command.append(
-            f"--args=--model=/mnt/models/{model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model=/mnt/models/{model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
 
     command.append("--allow-unauthenticated" if allow_unauthenticated else "--no-allow-unauthenticated")
@@ -497,13 +497,13 @@ async def deploy_vllm(
         "--execution-environment=gen2",
         "--no-allow-unauthenticated",
         f"--region={LOCATION}",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
     if is_hf:
         cmd.append("--set-secrets=HF_TOKEN=hf-token:latest")
         cmd.append(
-            f"--args=--model={model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model={model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
     else:
         cmd.append(
@@ -511,7 +511,7 @@ async def deploy_vllm(
         )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         cmd.append(
-            f"--args=--model=/mnt/models/{model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model=/mnt/models/{model_path}{quant_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
 
     try:

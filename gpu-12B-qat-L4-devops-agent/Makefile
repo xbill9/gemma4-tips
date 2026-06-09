@@ -30,6 +30,7 @@ deploy-vllm:
 	gcloud beta run deploy $(SERVICE_NAME) \
 		--project=$(PROJECT_ID) \
 		--image=vllm/vllm-openai:nightly \
+		--command=python3,-m,vllm.entrypoints.openai.api_server \
 		--gpu=1 \
 		--gpu-type=nvidia-l4 \
 		--no-gpu-zonal-redundancy \
@@ -43,12 +44,12 @@ deploy-vllm:
 		--memory=16Gi \
 		--cpu=4 \
 		--execution-environment=gen2 \
-		--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true \
+		--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true,mount-options=uid=1001;gid=1001 \
 		--add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-		--args=--model=/mnt/models/$(MODEL_PATH),--quantization=compressed-tensors,--dtype=bfloat16,--max-model-len=32768,--enforce-eager,--attention-backend=TRITON_ATTN,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=auto,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080 \
+		--args=--model=/mnt/models/$(MODEL_PATH),--quantization=compressed-tensors,--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={},--host=0.0.0.0,--port=8080 \
 		--no-allow-unauthenticated \
 		--region=$(REGION) \
-		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0,VLLM_ATTENTION_BACKEND=TRITON_ATTN,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536
+		--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536
 
 # Deploy the vLLM inference stack
 deploy: deploy-vllm
