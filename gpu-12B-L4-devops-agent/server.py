@@ -199,7 +199,7 @@ def get_deployment_template() -> str:
 # Required: GCS FUSE mount
 
 service: {DEFAULT_SERVICE_NAME}
-image: vllm/vllm-openai:latest
+image: vllm/vllm-openai:nightly
 resources:
   limits:
     nvidia.com/gpu: 1
@@ -394,10 +394,10 @@ async def query_vllm(prompt: str, max_tokens: int = 512, temperature: float = 0.
 def get_vllm_deployment_config(
     service_name: str = DEFAULT_SERVICE_NAME,
     bucket_name: str = BUCKET_NAME,
-    model_path: str = "gemma-4-12B-it",
+    model_path: str = "gemma-4-12B-it-text-fp8",
     allow_unauthenticated: bool = False,
     min_instances: int = 0,
-    gpu_memory_utilization: float = 0.85,
+    gpu_memory_utilization: float = 0.90,
     quantization: Optional[str] = None,
 ) -> str:
     """
@@ -409,7 +409,7 @@ def get_vllm_deployment_config(
         model_path: The sub-path inside the bucket (e.g., 'gemma-4-12B-it') or Hugging Face repo ID.
         allow_unauthenticated: Whether to allow unauthenticated access to the service.
         min_instances: The minimum number of instances to keep warm (default: 0).
-        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.95).
+        gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.90).
         quantization: The quantization format to use (default: auto-detected).
     """
     # Check if we are pulling directly from Hugging Face
@@ -421,17 +421,20 @@ def get_vllm_deployment_config(
             quantization = "compressed-tensors"
         elif "nvfp4" in model_path.lower() or "fp4" in model_path.lower():
             quantization = "nvfp4"
+        elif "vrfai" in model_path.lower() or "modelopt" in model_path.lower():
+            quantization = "modelopt"
         elif "fp8" in model_path.lower():
             quantization = "fp8"
         elif "e4b" in model_path.lower() or "bitsandbytes" in model_path.lower() or "bnb" in model_path.lower():
             quantization = "bitsandbytes"
 
     quant_arg_pipe = f"|--quantization={quantization}" if quantization else ""
+    hf_env = "HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0" if is_hf else "HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1"
 
     command = [
         "gcloud beta run deploy",
         service_name,
-        "--image=vllm/vllm-openai:latest",
+        "--image=vllm/vllm-openai:nightly",
         "--command=python3,-m,vllm.entrypoints.openai.api_server",
         "--gpu=1",
         "--gpu-type=nvidia-l4",
@@ -446,13 +449,13 @@ def get_vllm_deployment_config(
         "--memory=32Gi",
         "--cpu=8",
         "--execution-environment=gen2",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN",
+        f"--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,{hf_env}",
     ]
 
     if is_hf:
         command.append("--set-secrets=HF_TOKEN=hf-token:latest")
         command.append(
-            f'--args=\'^|^--model={model_path}|--dtype=bfloat16{quant_arg_pipe}|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization={gpu_memory_utilization}|--kv-cache-dtype=auto|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--attention-backend=triton_attn|--linear-backend=marlin|--limit-mm-per-prompt={{"image":0,"audio":0,"video":0}}|--host=0.0.0.0|--port=8000\''
+            f'--args=\'^|^--model={model_path}|--dtype=bfloat16{quant_arg_pipe}|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization={gpu_memory_utilization}|--kv-cache-dtype=fp8|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--enforce-eager|--limit-mm-per-prompt={{"image":0,"audio":0,"video":0}}|--host=0.0.0.0|--port=8000\''
         )
     else:
         for i, val in enumerate(command):
@@ -476,7 +479,7 @@ def get_vllm_deployment_config(
             f"--max-model-len=16384 "
             f"--disable-chunked-mm-input "
             f"--gpu-memory-utilization={gpu_memory_utilization} "
-            f"--kv-cache-dtype=auto "
+            f"--kv-cache-dtype=fp8 "
             f"--tensor-parallel-size=1 "
             f"--max-num-seqs=8 "
             f"--enable-chunked-prefill "
@@ -486,8 +489,6 @@ def get_vllm_deployment_config(
             f"--reasoning-parser=gemma4 "
             f"--async-scheduling "
             f"--enforce-eager "
-            f"--attention-backend=triton_attn "
-            f"--linear-backend=marlin "
             f'--limit-mm-per-prompt=\'{{"image":0,"audio":0,"video":0}}\' '
             f"--host=0.0.0.0 "
             f"--port=8000"
@@ -503,7 +504,7 @@ def get_vllm_deployment_config(
 @mcp.tool()
 async def deploy_vllm(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "gemma-4-12B-it",
+    model_path: str = "gemma-4-12B-it-text-fp8",
     bucket_name: str = BUCKET_NAME,
     quantization: Optional[str] = None,
 ) -> str:
@@ -524,12 +525,15 @@ async def deploy_vllm(
             quantization = "compressed-tensors"
         elif "nvfp4" in model_path.lower() or "fp4" in model_path.lower():
             quantization = "nvfp4"
+        elif "vrfai" in model_path.lower() or "modelopt" in model_path.lower():
+            quantization = "modelopt"
         elif "fp8" in model_path.lower():
             quantization = "fp8"
         elif "e4b" in model_path.lower() or "bitsandbytes" in model_path.lower() or "bnb" in model_path.lower():
             quantization = "bitsandbytes"
 
     quant_arg_pipe = f"|--quantization={quantization}" if quantization else ""
+    hf_env = "HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0" if is_hf else "HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1"
 
     cmd = [
         "gcloud",
@@ -538,7 +542,7 @@ async def deploy_vllm(
         "deploy",
         service_name,
         f"--project={PROJECT_ID}",
-        "--image=vllm/vllm-openai:latest",
+        "--image=vllm/vllm-openai:nightly",
         "--command=python3,-m,vllm.entrypoints.openai.api_server",
         "--gpu=1",
         "--gpu-type=nvidia-l4",
@@ -555,13 +559,13 @@ async def deploy_vllm(
         "--execution-environment=gen2",
         "--no-allow-unauthenticated",
         f"--region={LOCATION}",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN",
+        f"--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,{hf_env}",
     ]
 
     if is_hf:
         cmd.append("--set-secrets=HF_TOKEN=hf-token:latest")
         cmd.append(
-            f'--args=^|^--model={model_path}|--dtype=bfloat16{quant_arg_pipe}|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization=0.85|--kv-cache-dtype=auto|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--enforce-eager|--attention-backend=triton_attn|--linear-backend=marlin|--limit-mm-per-prompt={{\\"image\\":0,\\"audio\\":0,\\"video\\":0}}|--host=0.0.0.0|--port=8000'
+            f'--args=^|^--model={model_path}|--dtype=bfloat16{quant_arg_pipe}|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization=0.90|--kv-cache-dtype=fp8|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--enforce-eager|--limit-mm-per-prompt={{\\"image\\":0,\\"audio\\":0,\\"video\\":0}}|--host=0.0.0.0|--port=8000'
         )
     else:
         for i, val in enumerate(cmd):
@@ -584,8 +588,8 @@ async def deploy_vllm(
             f"{quant_str} "
             f"--max-model-len=16384 "
             f"--disable-chunked-mm-input "
-            f"--gpu-memory-utilization=0.85 "
-            f"--kv-cache-dtype=auto "
+            f"--gpu-memory-utilization=0.90 "
+            f"--kv-cache-dtype=fp8 "
             f"--tensor-parallel-size=1 "
             f"--max-num-seqs=8 "
             f"--enable-chunked-prefill "
@@ -595,9 +599,7 @@ async def deploy_vllm(
             f"--reasoning-parser=gemma4 "
             f"--async-scheduling "
             f"--enforce-eager "
-            f"--attention-backend=triton_attn "
-            f"--linear-backend=marlin "
-            f'--limit-mm-per-prompt=\'{{"image":0,"audio":0,"video":0}}\' '
+            f'--limit-mm-per-prompt=\'{{\\"image\\":0,\\"audio\\":0,\\"video\\":0}}\' '
             f"--host=0.0.0.0 "
             f"--port=8000"
         )
@@ -736,7 +738,7 @@ spec:
         cloud.google.com/gke-gpu: "true"
       containers:
       - name: vllm-gpu
-        image: vllm/vllm-openai:latest
+        image: vllm/vllm-openai:nightly
         resources:
           limits:
             nvidia.com/gpu: "1"

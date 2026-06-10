@@ -84,14 +84,14 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cmd[2], "run")
         self.assertEqual(cmd[3], "deploy")
         self.assertEqual(cmd[4], "test-service")
-        self.assertIn("--image=vllm/vllm-openai:latest", cmd)
+        self.assertIn("--image=vllm/vllm-openai:nightly", cmd)
         self.assertIn("--command=sh,-c", cmd)
         self.assertIn(
             "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options=uid=1001;gid=1001",
             cmd,
         )
         self.assertIn(
-            "--args=^|^mkdir -p /tmp/model && echo '⌛ Copying model weights from GCS FUSE to local tmpfs...' && cp -r /mnt/models/test-model/* /tmp/model/ && echo '✅ Copy complete. Starting vLLM...' && exec python3 -m vllm.entrypoints.openai.api_server --model=/tmp/model --dtype=bfloat16 --max-model-len=16384 --disable-chunked-mm-input --gpu-memory-utilization=0.85 --kv-cache-dtype=auto --tensor-parallel-size=1 --max-num-seqs=8 --enable-chunked-prefill --max-num-batched-tokens=4096 --enable-auto-tool-choice --tool-call-parser=gemma4 --reasoning-parser=gemma4 --async-scheduling --enforce-eager --attention-backend=triton_attn --linear-backend=marlin --limit-mm-per-prompt='{\"image\":0,\"audio\":0,\"video\":0}' --host=0.0.0.0 --port=8000",
+            "--args=^|^mkdir -p /tmp/model && echo '⌛ Copying model weights from GCS FUSE to local tmpfs...' && cp -r /mnt/models/test-model/* /tmp/model/ && echo '✅ Copy complete. Starting vLLM...' && exec python3 -m vllm.entrypoints.openai.api_server --model=/tmp/model --dtype=bfloat16 --max-model-len=16384 --disable-chunked-mm-input --gpu-memory-utilization=0.90 --kv-cache-dtype=fp8 --tensor-parallel-size=1 --max-num-seqs=8 --enable-chunked-prefill --max-num-batched-tokens=4096 --enable-auto-tool-choice --tool-call-parser=gemma4 --reasoning-parser=gemma4 --async-scheduling --enforce-eager --limit-mm-per-prompt='{\\\"image\\\":0,\\\"audio\\\":0,\\\"video\\\":0}' --host=0.0.0.0 --port=8000",
             cmd,
         )
 
@@ -123,8 +123,9 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             "--add-volume=name=model-volume,type=cloud-storage,bucket=test-bucket,readonly=true,mount-options=uid=1001;gid=1001",
             cmd,
         )
+        self.assertIn("--image=vllm/vllm-openai:nightly", cmd)
         self.assertIn(
-            '--args=^|^--model=google/gemma-4-12B-it|--dtype=bfloat16|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization=0.85|--kv-cache-dtype=auto|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--enforce-eager|--attention-backend=triton_attn|--linear-backend=marlin|--limit-mm-per-prompt={\\"image\\":0,\\"audio\\":0,\\"video\\":0}|--host=0.0.0.0|--port=8000',
+            '--args=^|^--model=google/gemma-4-12B-it|--dtype=bfloat16|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization=0.90|--kv-cache-dtype=fp8|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--enforce-eager|--limit-mm-per-prompt={\\"image\\":0,\\"audio\\":0,\\"video\\":0}|--host=0.0.0.0|--port=8000',
             cmd,
         )
 

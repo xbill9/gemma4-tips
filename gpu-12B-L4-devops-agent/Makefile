@@ -3,8 +3,8 @@ PROJECT_ID ?= aisprint-491218
 REGION ?= us-east4
 BUCKET_NAME ?= $(PROJECT_ID)-bucket
 SERVICE_NAME ?= gpu-12b-l4-devops-agent
-MODEL_PATH ?= gemma-4-12B-it
-QUANTIZATION ?= auto
+MODEL_PATH ?= gemma-4-12B-it-text-fp8
+QUANTIZATION ?= modelopt
 
 install:
 	pip install -r requirements.txt
@@ -31,7 +31,7 @@ deploy-vllm:
 	@if echo "$(MODEL_PATH)" | grep -q "/"; then \
 		gcloud beta run deploy $(SERVICE_NAME) \
 			--project=$(PROJECT_ID) \
-			--image=vllm/vllm-openai:latest \
+			--image=vllm/vllm-openai:nightly \
 			--gpu=1 \
 			--gpu-type=nvidia-l4 \
 			--no-gpu-zonal-redundancy \
@@ -46,14 +46,14 @@ deploy-vllm:
 			--cpu=8 \
 			--execution-environment=gen2 \
 			--set-secrets=HF_TOKEN=hf-token:latest \
-			--args='^|^--model=$(MODEL_PATH)|--dtype=bfloat16|--quantization=$(QUANTIZATION)|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization=0.85|--kv-cache-dtype=auto|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--enforce-eager|--attention-backend=triton_attn|--linear-backend=marlin|--limit-mm-per-prompt={"image":0,"audio":0,"video":0}|--host=0.0.0.0|--port=8000' \
+			--args='^|^--model=$(MODEL_PATH)|--dtype=bfloat16|--quantization=$(QUANTIZATION)|--max-model-len=16384|--disable-chunked-mm-input|--gpu-memory-utilization=0.90|--kv-cache-dtype=fp8|--tensor-parallel-size=1|--max-num-seqs=8|--enable-chunked-prefill|--max-num-batched-tokens=4096|--enable-auto-tool-choice|--tool-call-parser=gemma4|--reasoning-parser=gemma4|--async-scheduling|--enforce-eager|--limit-mm-per-prompt={"image":0,"audio":0,"video":0}|--host=0.0.0.0|--port=8000' \
 			--no-allow-unauthenticated \
 			--region=$(REGION) \
-			--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN; \
+			--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0; \
 	else \
 		gcloud beta run deploy $(SERVICE_NAME) \
 			--project=$(PROJECT_ID) \
-			--image=vllm/vllm-openai:latest \
+			--image=vllm/vllm-openai:nightly \
 			--command=sh,-c \
 			--gpu=1 \
 			--gpu-type=nvidia-l4 \
@@ -70,10 +70,10 @@ deploy-vllm:
 			--execution-environment=gen2 \
 			--add-volume=name=model-volume,type=cloud-storage,bucket=$(BUCKET_NAME),readonly=true \
 			--add-volume-mount=volume=model-volume,mount-path=/mnt/models \
-			--args='^|^mkdir -p /tmp/model && echo "⌛ Copying model weights from GCS FUSE to local tmpfs..." && cp -r /mnt/models/$(MODEL_PATH)/* /tmp/model/ && echo "✅ Copy complete. Starting vLLM..." && exec python3 -m vllm.entrypoints.openai.api_server --model=/tmp/model --dtype=bfloat16 --quantization=$(QUANTIZATION) --max-model-len=16384 --disable-chunked-mm-input --gpu-memory-utilization=0.85 --kv-cache-dtype=auto --tensor-parallel-size=1 --max-num-seqs=8 --enable-chunked-prefill --max-num-batched-tokens=4096 --enable-auto-tool-choice --tool-call-parser=gemma4 --reasoning-parser=gemma4 --async-scheduling --enforce-eager --attention-backend=triton_attn --linear-backend=marlin --limit-mm-per-prompt="{\"image\":0,\"audio\":0,\"video\":0}" --host=0.0.0.0 --port=8000' \
+			--args='^|^mkdir -p /tmp/model && echo "⌛ Copying model weights from GCS FUSE to local tmpfs..." && cp -r /mnt/models/$(MODEL_PATH)/* /tmp/model/ && echo "✅ Copy complete. Starting vLLM..." && exec python3 -m vllm.entrypoints.openai.api_server --model=/tmp/model --dtype=bfloat16 --quantization=$(QUANTIZATION) --max-model-len=16384 --disable-chunked-mm-input --gpu-memory-utilization=0.90 --kv-cache-dtype=fp8 --tensor-parallel-size=1 --max-num-seqs=8 --enable-chunked-prefill --max-num-batched-tokens=4096 --enable-auto-tool-choice --tool-call-parser=gemma4 --reasoning-parser=gemma4 --async-scheduling --enforce-eager --limit-mm-per-prompt="{\"image\":0,\"audio\":0,\"video\":0}" --host=0.0.0.0 --port=8000' \
 			--no-allow-unauthenticated \
 			--region=$(REGION) \
-			--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_ATTENTION_BACKEND=TRITON_ATTN; \
+			--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1; \
 	fi
 
 # Deploy the vLLM inference stack

@@ -56,7 +56,7 @@ def get_auth_token():
         return ""
 
 
-async def tokenize_prompt(url, token, prompt_text):
+async def tokenize_prompt(url, token, prompt_text, model_name="google/gemma-4-12B-it"):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -64,7 +64,7 @@ async def tokenize_prompt(url, token, prompt_text):
         try:
             res = await client.post(
                 f"{url.rstrip('/')}/tokenize",
-                json={"model": "google/gemma-4-12B-it", "prompt": prompt_text},
+                json={"model": model_name, "prompt": prompt_text},
                 headers=headers,
                 timeout=15,
             )
@@ -75,10 +75,10 @@ async def tokenize_prompt(url, token, prompt_text):
     return len(prompt_text.split())
 
 
-async def get_prompt_for_size(url, token, size):
+async def get_prompt_for_size(url, token, size, model_name="google/gemma-4-12B-it"):
     word = " hello"
     guess_text = word * size
-    count = await tokenize_prompt(url, token, guess_text)
+    count = await tokenize_prompt(url, token, guess_text, model_name)
     if count == size:
         return guess_text
 
@@ -88,7 +88,7 @@ async def get_prompt_for_size(url, token, size):
             guess_text += word * (size - count)
         else:
             guess_text = guess_text[: guess_text.rfind(word)]
-        count = await tokenize_prompt(url, token, guess_text)
+        count = await tokenize_prompt(url, token, guess_text, model_name)
         attempts += 1
     return guess_text
 
@@ -101,14 +101,29 @@ async def run_sweep():
     print(f"Found vLLM Endpoint: {url}")
     token = get_auth_token()
 
-    context_sizes = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+    model_name = "google/gemma-4-12B-it"
+    try:
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        async with httpx.AsyncClient() as client:
+            res = await client.get(f"{url.rstrip('/')}/v1/models", headers=headers, timeout=10)
+            if res.status_code == 200:
+                models = res.json().get("data", [])
+                if models:
+                    model_name = models[0]["id"]
+                    print(f"Discovered active model ID: {model_name}")
+    except Exception as e:
+        print(f"Warning: Could not get active model ID: {e}")
+
+    context_sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
     concurrencies = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 
     # Pre-generate and cache prompts
     print("Generating prompts for all context window sizes...")
     prompts_cache = {}
     for size in context_sizes:
-        prompt_str = await get_prompt_for_size(url, token, size)
+        prompt_str = await get_prompt_for_size(url, token, size, model_name)
         prompts_cache[size] = prompt_str
         print(f"  Context size {size:5d} tokens generated.")
 
@@ -119,7 +134,7 @@ async def run_sweep():
 
     async def send_req(client, sem, prompt_text):
         payload = {
-            "model": "google/gemma-4-12B-it",
+            "model": model_name,
             "prompt": prompt_text,
             "max_tokens": 1,  # Minimize output tokens to focus on input prefill scaling
             "temperature": 0.0,
@@ -217,7 +232,7 @@ async def run_sweep():
         f.write("# 📊 Gemma 4 vLLM GPU 2D Grid Concurrency Benchmark Report\n\n")
         f.write(f"Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Endpoint: `{url}`\n")
-        f.write("Model: `google/gemma-4-12B-it` (12B on NVIDIA L4 GPU Cloud Run, 3 instances max)\n\n")
+        f.write(f"Model: `{model_name}` (NVIDIA L4 GPU Cloud Run)\n\n")
 
         f.write("## 🕒 Average Latency Matrix (seconds)\n\n")
         header = "| Context \\ Users | " + " | ".join(f"{c}" for c in concurrencies) + " |\n"
@@ -242,7 +257,7 @@ async def run_sweep():
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 12))
 
         # Select representative context sizes for plotting
-        plot_sizes = [8, 128, 1024, 8192, 16384]
+        plot_sizes = [4, 128, 1024, 8192, 16384]
         markers = ["o", "s", "d", "^", "v"]
 
         # Latency subplot
