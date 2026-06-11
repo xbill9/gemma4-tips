@@ -947,6 +947,7 @@ async def get_help() -> str:
         "- **`get_huggingface_model_copy_instructions`**: Instructions to download model from Hugging Face and upload to GCS.\n"
         "- **`get_huggingfacehub_download_path`**: Resolves local cache path using huggingface_hub.\n\n"
         "#### 📊 Monitoring & Logs\n"
+        "- **`get_metrics`**: Fetches raw Prometheus metrics from the running vLLM service's /metrics endpoint.\n"
         "- **`get_system_status`**: High-level status dashboard of TPU node health and vLLM service.\n"
         "- **`get_endpoint`**: Verifies connectivity and returns the active service URL.\n"
         "- **`get_vllm_docker_logs`**: Retrieves logs from the vLLM Docker container on the TPU VM.\n"
@@ -987,6 +988,26 @@ async def get_model_show_details(model_name: str) -> str:
     if rc != 0:
         return f"⚠️ Failed to get model details for {model_name}.\nError: {err}\nOutput: {out}"
     return f"### 🧩 Model Details for `{model_name}`:\n\n```\n{out}\n```"
+
+
+@mcp.tool()
+async def get_metrics() -> str:
+    """
+    Fetches raw Prometheus metrics from the running vLLM service's /metrics endpoint.
+    """
+    url = await discover_vllm_url()
+    if not url:
+        return "❌ No ACTIVE Queued Resource with a reachable vLLM service found."
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(f"{url}/metrics")
+            if res.status_code == 200:
+                return res.text
+            else:
+                return f"❌ Failed to fetch metrics. Status code: {res.status_code}\nResponse: {res.text}"
+    except Exception as e:
+        return f"❌ Error connecting to vLLM metrics endpoint: {e}"
 
 
 if __name__ == "__main__":

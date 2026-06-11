@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 
+
 def generate_charts():
     standard_csv = "/home/xbill/gemma4-tips/gpu-12B-L4-devops-agent/benchmark_sweep_results.csv"
     qat_csv = "/home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/benchmark_sweep_results.csv"
@@ -30,7 +31,6 @@ def generate_charts():
     if "tokens_per_sec" not in qat_df.columns:
         qat_df["tokens_per_sec"] = qat_df["req_per_sec"] * 1.0
 
-
     # Set up matplotlib style for rich aesthetics
     plt.rcParams["figure.facecolor"] = "#0f172a"  # Slate 900
     plt.rcParams["axes.facecolor"] = "#1e293b"  # Slate 800
@@ -47,18 +47,28 @@ def generate_charts():
     # Context window sizes and colors to use
     sizes_to_plot = [128, 1024, 8192]
     colors = {
-        128: "#38bdf8",   # Sky blue
+        128: "#38bdf8",  # Sky blue
         1024: "#a855f7",  # Purple
         8192: "#f43f5e",  # Rose/Red
-        16384: "#10b981"  # Emerald green (used in success rate plot)
+        16384: "#10b981",  # Emerald green (used in success rate plot)
     }
     concurrencies_to_1024 = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 
     # --- CHART 1: Throughput Comparison (Requests vs Tokens) ---
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), facecolor="#0f172a")
-    fig.suptitle("Gemma 4 (12B) Serving Throughput: Standard FP8 vs QAT INT4", fontsize=18, fontweight="bold", color="#f8fafc", y=0.96)
+    fig.suptitle(
+        "Gemma 4 (12B) Serving Throughput: Standard FP8 vs QAT INT4",
+        fontsize=18,
+        fontweight="bold",
+        color="#f8fafc",
+        y=0.96,
+    )
 
-    ax1.set_title("Request Throughput (Requests/sec) vs Concurrency\n(Short Completions: Standard = 1 token, QAT = 16 tokens)", fontsize=13, pad=15)
+    ax1.set_title(
+        "Request Throughput (Requests/sec) vs Concurrency\n(Short Completions: Standard = 1 token, QAT = 16 tokens)",
+        fontsize=13,
+        pad=15,
+    )
     ax1.grid(True)
     ax2.set_title("Equivalent Token Generation Throughput (tokens/sec) vs Concurrency", fontsize=13, pad=15)
     ax2.grid(True)
@@ -69,12 +79,44 @@ def generate_charts():
         color = colors[size]
 
         if not sub_std.empty:
-            ax1.plot(sub_std["concurrency"], sub_std["req_per_sec"], color=color, linestyle="-", marker="o", linewidth=2.5, label=f"Std (FP8) - {size} ctx")
-            ax2.plot(sub_std["concurrency"], sub_std["tokens_per_sec"], color=color, linestyle="-", marker="o", linewidth=2.5, label=f"Std (FP8) - {size} ctx")
+            ax1.plot(
+                sub_std["concurrency"],
+                sub_std["req_per_sec"],
+                color=color,
+                linestyle="-",
+                marker="o",
+                linewidth=2.5,
+                label=f"Std (FP8) - {size} ctx",
+            )
+            ax2.plot(
+                sub_std["concurrency"],
+                sub_std["tokens_per_sec"],
+                color=color,
+                linestyle="-",
+                marker="o",
+                linewidth=2.5,
+                label=f"Std (FP8) - {size} ctx",
+            )
 
         if not sub_qat.empty:
-            ax1.plot(sub_qat["concurrency"], sub_qat["req_per_sec"], color=color, linestyle="--", marker="D", linewidth=2.0, label=f"QAT (INT4) - {size} ctx")
-            ax2.plot(sub_qat["concurrency"], sub_qat["tokens_per_sec"], color=color, linestyle="--", marker="D", linewidth=2.0, label=f"QAT (INT4) - {size} ctx")
+            ax1.plot(
+                sub_qat["concurrency"],
+                sub_qat["req_per_sec"],
+                color=color,
+                linestyle="--",
+                marker="D",
+                linewidth=2.0,
+                label=f"QAT (INT4) - {size} ctx",
+            )
+            ax2.plot(
+                sub_qat["concurrency"],
+                sub_qat["tokens_per_sec"],
+                color=color,
+                linestyle="--",
+                marker="D",
+                linewidth=2.0,
+                label=f"QAT (INT4) - {size} ctx",
+            )
 
     for ax in [ax1, ax2]:
         ax.set_xlabel("Concurrency (Concurrent Users)", labelpad=10)
@@ -91,7 +133,13 @@ def generate_charts():
 
     # --- CHART 2: Latency Profiles (Average vs P95) ---
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), facecolor="#0f172a")
-    fig.suptitle("Gemma 4 (12B) Latency Profiles: Standard FP8 vs QAT INT4", fontsize=18, fontweight="bold", color="#f8fafc", y=0.96)
+    fig.suptitle(
+        "Gemma 4 (12B) Latency Profiles: Standard FP8 vs QAT INT4",
+        fontsize=18,
+        fontweight="bold",
+        color="#f8fafc",
+        y=0.96,
+    )
 
     ax1.set_title("Average Latency (seconds) vs Concurrency", fontsize=13, pad=15)
     ax1.grid(True)
@@ -104,12 +152,44 @@ def generate_charts():
         color = colors[size]
 
         if not sub_std.empty:
-            ax1.plot(sub_std["concurrency"], sub_std["avg_latency"], color=color, linestyle="-", marker="o", linewidth=2.5, label=f"Std (FP8) - {size} ctx")
-            ax2.plot(sub_std["concurrency"], sub_std["p95_latency"], color=color, linestyle="-", marker="o", linewidth=2.5, label=f"Std (FP8) - {size} ctx")
+            ax1.plot(
+                sub_std["concurrency"],
+                sub_std["avg_latency"],
+                color=color,
+                linestyle="-",
+                marker="o",
+                linewidth=2.5,
+                label=f"Std (FP8) - {size} ctx",
+            )
+            ax2.plot(
+                sub_std["concurrency"],
+                sub_std["p95_latency"],
+                color=color,
+                linestyle="-",
+                marker="o",
+                linewidth=2.5,
+                label=f"Std (FP8) - {size} ctx",
+            )
 
         if not sub_qat.empty:
-            ax1.plot(sub_qat["concurrency"], sub_qat["avg_latency"], color=color, linestyle="--", marker="D", linewidth=2.0, label=f"QAT (INT4) - {size} ctx")
-            ax2.plot(sub_qat["concurrency"], sub_qat["p95_latency"], color=color, linestyle="--", marker="D", linewidth=2.0, label=f"QAT (INT4) - {size} ctx")
+            ax1.plot(
+                sub_qat["concurrency"],
+                sub_qat["avg_latency"],
+                color=color,
+                linestyle="--",
+                marker="D",
+                linewidth=2.0,
+                label=f"QAT (INT4) - {size} ctx",
+            )
+            ax2.plot(
+                sub_qat["concurrency"],
+                sub_qat["p95_latency"],
+                color=color,
+                linestyle="--",
+                marker="D",
+                linewidth=2.0,
+                label=f"QAT (INT4) - {size} ctx",
+            )
 
     for ax in [ax1, ax2]:
         ax.set_xlabel("Concurrency (Concurrent Users)", labelpad=10)
@@ -126,7 +206,13 @@ def generate_charts():
 
     # --- CHART 3: Success Rate Stability Matrix ---
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), facecolor="#0f172a")
-    fig.suptitle("Gemma 4 (12B) Request Success Rate & Stability comparison", fontsize=18, fontweight="bold", color="#f8fafc", y=0.96)
+    fig.suptitle(
+        "Gemma 4 (12B) Request Success Rate & Stability comparison",
+        fontsize=18,
+        fontweight="bold",
+        color="#f8fafc",
+        y=0.96,
+    )
 
     ax1.set_title("Standard FP8 Success Rate vs Concurrency", fontsize=13, pad=15)
     ax1.grid(True)
@@ -141,9 +227,25 @@ def generate_charts():
         color = colors[size]
 
         if not sub_std.empty:
-            ax1.plot(sub_std["concurrency"], sub_std["success_rate"] * 100.0, color=color, linestyle="-", marker="o", linewidth=2.5, label=f"Context: {size}")
+            ax1.plot(
+                sub_std["concurrency"],
+                sub_std["success_rate"] * 100.0,
+                color=color,
+                linestyle="-",
+                marker="o",
+                linewidth=2.5,
+                label=f"Context: {size}",
+            )
         if not sub_qat.empty:
-            ax2.plot(sub_qat["concurrency"], sub_qat["success_rate"] * 100.0, color=color, linestyle="--", marker="D", linewidth=2.5, label=f"Context: {size}")
+            ax2.plot(
+                sub_qat["concurrency"],
+                sub_qat["success_rate"] * 100.0,
+                color=color,
+                linestyle="--",
+                marker="D",
+                linewidth=2.5,
+                label=f"Context: {size}",
+            )
 
     for ax in [ax1, ax2]:
         ax.set_xlabel("Concurrency (Concurrent Users)", labelpad=10)
@@ -170,8 +272,24 @@ def generate_charts():
     # Filter out context size 16384 for Standard since it fails
     std_c8 = std_c8[std_c8["context_size"] < 16384]
 
-    ax.plot(std_c8["context_size"], std_c8["avg_latency"], color="#38bdf8", linestyle="-", marker="o", linewidth=3.0, label="Standard FP8 (16K Limit)")
-    ax.plot(qat_c8["context_size"], qat_c8["avg_latency"], color="#10b981", linestyle="--", marker="D", linewidth=2.5, label="QAT INT4 (32K Limit)")
+    ax.plot(
+        std_c8["context_size"],
+        std_c8["avg_latency"],
+        color="#38bdf8",
+        linestyle="-",
+        marker="o",
+        linewidth=3.0,
+        label="Standard FP8 (16K Limit)",
+    )
+    ax.plot(
+        qat_c8["context_size"],
+        qat_c8["avg_latency"],
+        color="#10b981",
+        linestyle="--",
+        marker="D",
+        linewidth=2.5,
+        label="QAT INT4 (32K Limit)",
+    )
 
     ax.set_xscale("log", base=2)
     ax.set_xlabel("Context Size (tokens)", labelpad=10)
@@ -179,12 +297,13 @@ def generate_charts():
     ax.set_xticks([4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384])
     ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%d"))
     ax.legend(frameon=True, facecolor="#1e293b", edgecolor="#334155")
-    
+
     plt.tight_layout()
     plt.savefig("/home/xbill/gemma4-tips/gpu-12B-L4-devops-agent/context_scaling_comparison.png", dpi=300)
     plt.close()
 
     print("All comparison charts successfully generated.")
+
 
 if __name__ == "__main__":
     generate_charts()

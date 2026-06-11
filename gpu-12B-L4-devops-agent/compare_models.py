@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
+
 def generate_comparison():
     standard_csv = "/home/xbill/gemma4-tips/gpu-12B-L4-devops-agent/benchmark_sweep_results.csv"
     qat_csv = "/home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/benchmark_sweep_results.csv"
@@ -36,8 +37,11 @@ def generate_comparison():
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 8.5), facecolor="#0f172a")
     fig.suptitle(
-        "Gemma 4 (12B) Model Serving Comparison on NVIDIA L4 GPU\nStandard (FP8 Weight, 16K Max Ctx) vs QAT (INT4 Weight, 32K Max Ctx)", 
-        fontsize=18, fontweight="bold", color="#f8fafc", y=0.96
+        "Gemma 4 (12B) Model Serving Comparison on NVIDIA L4 GPU\nStandard (FP8 Weight, 16K Max Ctx) vs QAT (INT4 Weight, 32K Max Ctx)",
+        fontsize=18,
+        fontweight="bold",
+        color="#f8fafc",
+        y=0.96,
     )
 
     # Context window sizes to compare
@@ -55,9 +59,9 @@ def generate_comparison():
 
     # Colors for different context sizes
     colors = {
-        128: "#38bdf8",   # Sky blue
+        128: "#38bdf8",  # Sky blue
         1024: "#a855f7",  # Purple
-        8192: "#f43f5e"   # Rose/Red
+        8192: "#f43f5e",  # Rose/Red
     }
 
     # Plot lines
@@ -81,7 +85,7 @@ def generate_comparison():
                 linestyle="-",
                 marker="o",
                 linewidth=2.5,
-                label=f"Std (FP8) - {size} ctx"
+                label=f"Std (FP8) - {size} ctx",
             )
             ax2.plot(
                 sub_std["concurrency"],
@@ -90,7 +94,7 @@ def generate_comparison():
                 linestyle="-",
                 marker="o",
                 linewidth=2.5,
-                label=f"Std (FP8) - {size} ctx"
+                label=f"Std (FP8) - {size} ctx",
             )
 
         # QAT (Dashed line, diamonds)
@@ -102,7 +106,7 @@ def generate_comparison():
                 linestyle="--",
                 marker="D",
                 linewidth=2.0,
-                label=f"QAT (INT4) - {size} ctx"
+                label=f"QAT (INT4) - {size} ctx",
             )
             ax2.plot(
                 sub_qat["concurrency"],
@@ -111,7 +115,7 @@ def generate_comparison():
                 linestyle="--",
                 marker="D",
                 linewidth=2.0,
-                label=f"QAT (INT4) - {size} ctx"
+                label=f"QAT (INT4) - {size} ctx",
             )
 
     # Configure X axes
@@ -131,6 +135,7 @@ def generate_comparison():
     chart_path = "/home/xbill/gemma4-tips/gpu-12B-L4-devops-agent/model_comparison_chart.png"
     plt.savefig(chart_path, dpi=300, facecolor=fig.get_facecolor(), edgecolor="none")
     print(f"Comparison chart saved to {chart_path}")
+
 
 if __name__ == "__main__":
     generate_comparison()

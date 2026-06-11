@@ -1266,6 +1266,7 @@ async def get_help() -> str:
         "- **`get_huggingface_model_copy_instructions`**: Instructions to download model from Hugging Face and upload to GCS.\n"
         "- **`get_huggingfacehub_download_path`**: Resolves local cache path using huggingface_hub.\n\n"
         "#### 📊 Monitoring & Status\n"
+        "- **`get_metrics`**: Fetches raw Prometheus metrics from the running vLLM service's /metrics endpoint.\n"
         "- **`get_system_status`**: Provides a high-level status dashboard of the Cloud Run service and health.\n"
         "- **`get_endpoint`**: Verifies connectivity and returns the active service URL.\n"
         "- **`get_model_details`**: Retrieves detailed model metadata and engine state from `/v1/models`.\n"
@@ -1280,6 +1281,27 @@ async def get_help() -> str:
         "- **`analyze_gpu_logs`**: Fetches Cloud Run logs and uses Gemma 4 to analyze them for SRE/DevOps errors.\n"
         "- **`suggest_sre_remediation`**: Suggests remediation plans for SRE errors using the model.\n"
     )
+
+
+@mcp.tool()
+async def get_metrics() -> str:
+    """
+    Fetches the Prometheus metrics from the active Cloud Run vLLM service.
+    """
+    try:
+        url = get_vllm_url()
+        token = get_auth_token()
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(f"{url}/metrics", headers=headers)
+            if res.status_code == 200:
+                return res.text
+            else:
+                return f"🔴 Failed to retrieve metrics. Status code: {res.status_code}\n\nResponse:\n{res.text[:1000]}"
+    except Exception as e:
+        return f"🔴 Error fetching metrics from Cloud Run: {e}"
 
 
 if __name__ == "__main__":

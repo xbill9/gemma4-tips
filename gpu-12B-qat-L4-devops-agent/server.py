@@ -434,7 +434,9 @@ def get_vllm_deployment_config(
         "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
-    quant_arg = ",--quantization=compressed-tensors" if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]) else ""
+    quant_arg = (
+        ",--quantization=compressed-tensors" if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]) else ""
+    )
 
     if is_hf:
         command.append("--set-secrets=HF_TOKEN=hf-token:latest")
@@ -471,7 +473,9 @@ async def deploy_vllm(
         bucket_name: GCS bucket name (only used if using GCS FUSE).
     """
     is_hf = "/" in model_path and not model_path.startswith("/")
-    quant_arg = ",--quantization=compressed-tensors" if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]) else ""
+    quant_arg = (
+        ",--quantization=compressed-tensors" if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]) else ""
+    )
 
     cmd = [
         "gcloud",
@@ -1262,6 +1266,7 @@ async def get_help() -> str:
         "- **`get_huggingface_model_copy_instructions`**: Instructions to download model from Hugging Face and upload to GCS.\n"
         "- **`get_huggingfacehub_download_path`**: Resolves local cache path using huggingface_hub.\n\n"
         "#### 📊 Monitoring & Status\n"
+        "- **`get_metrics`**: Fetches raw Prometheus metrics from the running vLLM service's /metrics endpoint.\n"
         "- **`get_system_status`**: Provides a high-level status dashboard of the Cloud Run service and health.\n"
         "- **`get_endpoint`**: Verifies connectivity and returns the active service URL.\n"
         "- **`get_model_details`**: Retrieves detailed model metadata and engine state from `/v1/models`.\n"
@@ -1276,6 +1281,27 @@ async def get_help() -> str:
         "- **`analyze_gpu_logs`**: Fetches Cloud Run logs and uses Gemma 4 to analyze them for SRE/DevOps errors.\n"
         "- **`suggest_sre_remediation`**: Suggests remediation plans for SRE errors using the model.\n"
     )
+
+
+@mcp.tool()
+async def get_metrics() -> str:
+    """
+    Fetches the Prometheus metrics from the active Cloud Run vLLM service.
+    """
+    try:
+        url = get_vllm_url()
+        token = get_auth_token()
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(f"{url}/metrics", headers=headers)
+            if res.status_code == 200:
+                return res.text
+            else:
+                return f"🔴 Failed to retrieve metrics. Status code: {res.status_code}\n\nResponse:\n{res.text[:1000]}"
+    except Exception as e:
+        return f"🔴 Error fetching metrics from Cloud Run: {e}"
 
 
 if __name__ == "__main__":

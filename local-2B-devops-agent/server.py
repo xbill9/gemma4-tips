@@ -134,7 +134,7 @@ async def manage_docker(action: str = "status") -> str:
     ollama_model = get_current_model_name()
     docker_run_cmd = os.getenv(
         "LOCAL_DOCKER_RUN_CMD",
-        f"docker run --name gemma4 -d -p {LOCAL_VLLM_PORT}:11434 --cpuset-cpus=\"0-7\" "
+        f'docker run --name gemma4 -d -p {LOCAL_VLLM_PORT}:11434 --cpuset-cpus="0-7" '
         f"-e OLLAMA_KV_CACHE_TYPE=q4_0 -e OLLAMA_NUM_PARALLEL=1 -e OLLAMA_NUM_THREADS=4 "
         f"-v ollama_local_volume:/root/.ollama {LOCAL_DOCKER_IMAGE}",
     )
@@ -439,6 +439,7 @@ async def get_help() -> str:
         "- **`manage_docker`**: Manages the local container (actions: `start`, `stop`, `restart`, `status`, `log`, `rm`).\n"
         "- **`save_hf_token`**: Securely saves a Hugging Face API token locally in environment variables and cache.\n\n"
         "#### 📊 Monitoring & Status\n"
+        "- **`get_metrics`**: Fetches raw Prometheus metrics from the running vLLM service's /metrics endpoint.\n"
         "- **`get_system_status`**: Provides a high-level status dashboard of the local Docker container and vLLM service.\n"
         "- **`get_endpoint`**: Verifies connectivity and returns the active local vLLM service URL.\n"
         "- **`get_active_models`**: Gets the active resource usage (actively loaded models, sizes, CPU/GPU status, context size) via ollama ps.\n"
@@ -480,6 +481,22 @@ async def get_model_show_details(model_name: str) -> str:
     if rc != 0:
         return f"⚠️ Failed to get model details for {model_name}.\nError: {err}\nOutput: {out}"
     return f"### 🧩 Model Details for `{model_name}`:\n\n```\n{out}\n```"
+
+
+@mcp.tool()
+async def get_metrics() -> str:
+    """
+    Fetches raw Prometheus metrics from the running vLLM service's /metrics endpoint.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(f"{VLLM_URL}/metrics")
+            if res.status_code == 200:
+                return res.text
+            else:
+                return f"❌ Failed to fetch metrics. Status code: {res.status_code}\nResponse: {res.text}"
+    except Exception as e:
+        return f"❌ Error connecting to vLLM metrics endpoint: {e}"
 
 
 if __name__ == "__main__":
