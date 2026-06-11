@@ -43,6 +43,12 @@ Here are the key entrypoints in the codebase:
 - **TPU Agent (31B):**
   - Server source: [tpu-31B-devops-agent/server.py](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/server.py)
   - Details: [tpu-31B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/GEMINI.md) & [tpu-31B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/README.md)
+- **GPU Agent (31B QAT L4):**
+  - Server source: [gpu-31B-qat-L4-devops-agent/server.py](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent/server.py)
+  - Details: [gpu-31B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent/README.md)
+- **TPU Agent (12B QAT v6e-1):**
+  - Server source: [tpu-12B-qat-v6e1-devops-agent/server.py](file:///home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent/server.py)
+  - Details: [tpu-12B-qat-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent/GEMINI.md) & [tpu-12B-qat-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent/README.md)
 
 ---
 
