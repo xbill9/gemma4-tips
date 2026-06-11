@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "tpu-12B-qat-v6e1-devops-agent": {
+      "command": "python3",
+      "args": [
+        "/home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent/server.py"
+      ],
+      "env": {
+        "GOOGLE_CLOUD_PROJECT": "aisprint-491218",
+        "GOOGLE_CLOUD_REGION": "europe-west4",
+        "GOOGLE_CLOUD_ZONE": "europe-west4-a",
+        "MODEL_NAME": "google/gemma-4-12B-it-qat-w4a16-ct",
+        "ACCELERATOR_TYPE": "v6e-1",
+        "TENSOR_PARALLEL_SIZE": "1"
+      }
+    }
+  }
+}
