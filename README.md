@@ -20,7 +20,7 @@ This workspace is organized into nine distinct sub-agents, each tailored to a sp
 | [GPU DevOps Agent (31B QAT L4)](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent) | Serverless cloud SRE (31B QAT model on L4 GPU) | vLLM | Google Cloud Run (us-east4) |
 | [TPU DevOps Agent (26B)](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent) | Ultra-high performance TPU SRE (26B configuration) | vLLM | Google Cloud TPUs (v6e Trillium) |
 | [TPU DevOps Agent (31B)](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent) | Ultra-high performance TPU SRE (31B configuration) | vLLM | Google Cloud TPUs (v6e Trillium) |
-| [TPU DevOps Agent (12B QAT v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent) | Ultra-high performance TPU SRE (12B QAT configuration) | vLLM | Google Cloud TPUs (v6e Trillium) |
+| [TPU DevOps Agent (12B v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent) | Ultra-high performance TPU SRE (12B configuration) | vLLM | Google Cloud TPUs (v6e Trillium) |
 
 ---
 
@@ -113,10 +113,10 @@ A root [Makefile](file:///home/xbill/gemma4-tips/Makefile) is provided to manage
 - **Inference Stack:** Runs `google/gemma-4-31B-it-qat-w4a16-ct` via vLLM on Cloud Run.
 - **Documentation:** See [gpu-31B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent/README.md).
 
-### 11. [TPU DevOps Agent (12B QAT v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent)
-- **Role:** High-performance TPU SRE/DevOps managing clusters (12B QAT configuration).
-- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM on Google Cloud TPUs (v6e Trillium).
-- **Documentation:** See [tpu-12B-qat-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent/README.md) and [tpu-12B-qat-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-12B-qat-v6e1-devops-agent/GEMINI.md).
+### 11. [TPU DevOps Agent (12B v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing clusters (12B configuration).
+- **Inference Stack:** Runs `google/gemma-4-12B-it` via vLLM on Google Cloud TPUs (v6e Trillium).
+- **Documentation:** See [tpu-12B-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/README.md) and [tpu-12B-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/GEMINI.md).
 
 ---
 

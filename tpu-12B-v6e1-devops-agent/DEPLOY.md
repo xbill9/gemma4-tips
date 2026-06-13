@@ -3,11 +3,11 @@
 This document summarizes the deployment state and configuration for the vLLM inference server running on Google Cloud TPUs.
 
 ## 📦 Model Artifacts
-The model used is **Gemma 4 12B QAT**, served directly from Hugging Face.
+The model used is **Gemma 4 12B**, served directly from Hugging Face.
 
-*   **Model ID:** `google/gemma-4-12B-it-qat-w4a16-ct`
-*   **Format:** Hugging Face Transformers (QAT quantized)
-*   **Precision:** Int4 Activation / Int16 Weight (quantized)
+*   **Model ID:** `google/gemma-4-12B-it`
+*   **Format:** Hugging Face Transformers
+*   **Precision:** bfloat16
 
 ## 🚀 Inference Stack (vLLM on TPU)
 The inference server is deployed on **Cloud TPU v6e (Trillium)** using the `vllm-tpu` specialized container.
@@ -25,7 +25,7 @@ To connect the MCP Agent to the TPU service, export the following environment va
 
 ```bash
 export VLLM_BASE_URL="http://<TPU_VM_IP>:8000"
-export MODEL_NAME="google/gemma-4-12B-it-qat-w4a16-ct"
+export MODEL_NAME="google/gemma-4-12B-it"
 export GOOGLE_CLOUD_PROJECT="aisprint-491218"
 ```
 
@@ -49,7 +49,7 @@ sudo docker run -t --rm --name vllm-gemma4 --privileged --net=host \
     -v /dev/shm:/dev/shm --shm-size 10gb \
     -e HF_TOKEN=$HF_TOKEN \
     vllm/vllm-tpu:nightly \
-    vllm serve google/gemma-4-12B-it-qat-w4a16-ct \
+    vllm serve google/gemma-4-12B-it \
     --max-model-len 16384 \
     --tensor-parallel-size 1 \
     --disable_chunked_mm_input \
@@ -62,7 +62,7 @@ sudo docker run -t --rm --name vllm-gemma4 --privileged --net=host \
 curl http://localhost:8000/v1/chat/completions \
     -H "Content-Type: application/json" \
     -d '{
-        "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+        "model": "google/gemma-4-12B-it",
         "messages": [{"role": "user", "content": "Hello Gemma 4!"}]
     }'
 ```

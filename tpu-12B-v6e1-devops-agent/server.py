@@ -19,13 +19,14 @@ logging.basicConfig(
 logger = logging.getLogger("vllm-devops-agent")
 
 # Initialize FastMCP server
-mcp = FastMCP("tpu-12B-qat-v6e1-devops-agent")
+mcp = FastMCP("tpu-12B-v6e1")
 
 # --- Configuration ---
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "aisprint-491218")
-ZONE = "europe-west4-a"
-REGION = "europe-west4"
-MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-12B-it-qat-w4a16-ct")
+ZONE = os.getenv("GOOGLE_CLOUD_ZONE", "us-east5-a")
+REGION = os.getenv("GOOGLE_CLOUD_REGION", "us-east5")
+DEFAULT_RESOURCE_ID = os.getenv("DEFAULT_RESOURCE_ID", "node-1")
+MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-12B-it")
 HF_SECRET_ID = "hf-token"
 ACCELERATOR_TYPE = os.getenv("ACCELERATOR_TYPE", "v6e-1")
 TENSOR_PARALLEL_SIZE = int(os.getenv("TENSOR_PARALLEL_SIZE", "1"))
@@ -55,7 +56,7 @@ async def run_command(cmd: list[str], timeout: int = 60) -> tuple[int, str, str]
 
 
 async def _get_node_id(resource_id: str) -> Optional[str]:
-    """Retrieves the node ID for a given Queued Resource."""
+    """Retrieves the node ID for a given Queued Resource, falling back to checking if it is a direct TPU VM name."""
     cmd = [
         "gcloud",
         "alpha",
@@ -69,7 +70,26 @@ async def _get_node_id(resource_id: str) -> Optional[str]:
         "--format=value(tpu.nodeSpec[0].nodeId)",
     ]
     rc, node_id, _ = await run_command(cmd)
-    return node_id.strip() if rc == 0 and node_id else None
+    if rc == 0 and node_id:
+        return node_id.strip()
+
+    # Fallback: check if a TPU VM exists with this name directly
+    check_vm_cmd = [
+        "gcloud",
+        "compute",
+        "tpus",
+        "tpu-vm",
+        "describe",
+        resource_id,
+        f"--project={PROJECT_ID}",
+        f"--zone={ZONE}",
+        "--format=value(name)",
+    ]
+    rc2, vm_name, _ = await run_command(check_vm_cmd)
+    if rc2 == 0 and vm_name:
+        return resource_id
+
+    return None
 
 
 async def _get_node_ip(node_id: str) -> Optional[str]:
@@ -126,7 +146,8 @@ echo 'Error loading template: {e}'"""
 
 
 async def discover_vllm_url() -> Optional[str]:
-    """Finds the URL of an ACTIVE Queued Resource vLLM service."""
+    """Finds the URL of an ACTIVE Queued Resource or READY TPU VM node vLLM service."""
+    # First, try to discover via Queued Resources
     list_cmd = [
         "gcloud",
         "alpha",
@@ -139,23 +160,57 @@ async def discover_vllm_url() -> Optional[str]:
         "--format=json",
     ]
     rc, stdout, _ = await run_command(list_cmd)
-    if rc != 0 or not stdout:
-        return None
+    if rc == 0 and stdout:
+        try:
+            resources = json.loads(stdout)
+            if resources:
+                for res in resources:
+                    if res.get("state", {}).get("state") == "ACTIVE":
+                        resource_id = res.get("name", "").split("/")[-1]
+                        node_id = await _get_node_id(resource_id)
+                        if node_id:
+                            ip = await _get_node_ip(node_id)
+                            if ip:
+                                url = f"http://{ip}:8000"
+                                logger.info(f"📡 Found ACTIVE Queued Resource {resource_id} at {url}")
+                                return url
+        except Exception as e:
+            logger.error(f"Discovery via queued resources error: {e}")
 
-    try:
-        resources = json.loads(stdout)
-        for res in resources:
-            if res.get("state", {}).get("state") == "ACTIVE":
-                resource_id = res.get("name", "").split("/")[-1]
-                node_id = await _get_node_id(resource_id)
-                if node_id:
-                    ip = await _get_node_ip(node_id)
-                    if ip:
-                        url = f"http://{ip}:8000"
-                        logger.info(f"📡 Found ACTIVE Queued Resource {resource_id} at {url}")
-                        return url
-    except Exception as e:
-        logger.error(f"Discovery error: {e}")
+    # Fallback: discover via direct TPU VMs
+    logger.info("No ACTIVE Queued Resource found. Checking direct TPU VMs...")
+    tpu_list_cmd = [
+        "gcloud",
+        "compute",
+        "tpus",
+        "tpu-vm",
+        "list",
+        f"--project={PROJECT_ID}",
+        f"--zone={ZONE}",
+        "--format=json",
+    ]
+    rc, stdout, _ = await run_command(tpu_list_cmd)
+    if rc == 0 and stdout:
+        try:
+            nodes = json.loads(stdout)
+            if nodes:
+                for node in nodes:
+                    if node.get("state") == "READY":
+                        node_name = node.get("name", "").split("/")[-1]
+                        # Try to get external IP from networkEndpoints
+                        endpoints = node.get("networkEndpoints", [])
+                        ip = None
+                        if endpoints:
+                            ip = endpoints[0].get("accessConfig", {}).get("externalIp")
+                            if not ip:
+                                ip = endpoints[0].get("ipAddress")
+                        if ip:
+                            url = f"http://{ip}:8000"
+                            logger.info(f"📡 Found READY TPU VM node {node_name} at {url}")
+                            return url
+        except Exception as e:
+            logger.error(f"Discovery via direct TPU VMs error: {e}")
+
     return None
 
 
@@ -163,8 +218,19 @@ async def get_vllm_client() -> AsyncOpenAI:
     """Initializes and returns an AsyncOpenAI client for the vLLM service."""
     url = await discover_vllm_url()
     if not url:
-        raise Exception(f"No ACTIVE Queued Resource found in {ZONE}.")
+        raise Exception(f"No ACTIVE Queued Resource or READY TPU VM node found in {ZONE}.")
     return AsyncOpenAI(base_url=f"{url}/v1", api_key="not-needed")
+
+
+async def get_active_model_name(client: AsyncOpenAI) -> str:
+    """Attempts to dynamically fetch the active model name from vLLM, defaulting to MODEL_NAME."""
+    try:
+        models = await client.models.list()
+        if models and models.data:
+            return models.data[0].id
+    except Exception as e:
+        logger.error(f"Error fetching active model name from vLLM: {e}")
+    return MODEL_NAME
 
 
 @mcp.tool()
@@ -172,10 +238,11 @@ async def verify_model_health() -> str:
     """Runs a deep logic check with latency reporting."""
     try:
         client = await get_vllm_client()
+        active_model = await get_active_model_name(client)
         start_time = time.monotonic()
         chat_completion = await client.chat.completions.create(
             messages=[{"role": "user", "content": "Hello, is the model working?"}],
-            model=MODEL_NAME,
+            model=active_model,
             max_tokens=10,
         )
         end_time = time.monotonic()
@@ -223,7 +290,7 @@ async def save_hf_token(token: str) -> str:
 
 
 @mcp.tool()
-async def get_vllm_deployment_config(service_name: str = "vllm-gemma4-qr", model_name: str = MODEL_NAME) -> str:
+async def get_vllm_deployment_config(service_name: str = DEFAULT_RESOURCE_ID, model_name: str = MODEL_NAME) -> str:
     """Generates the gcloud command for a single-host TPU v6e vLLM deployment."""
     hf_token = await get_secret() or "YOUR_HF_TOKEN"
     cmd = (
@@ -237,7 +304,7 @@ async def get_vllm_deployment_config(service_name: str = "vllm-gemma4-qr", model
         f"-v /dev/shm:/dev/shm --shm-size 10gb "
         f"-e HF_TOKEN={hf_token} "
         f"vllm/vllm-tpu:nightly vllm serve {model_name} "
-        f"--max-model-len 16384 --tensor-parallel-size {TENSOR_PARALLEL_SIZE} --disable_chunked_mm_input'"
+        f"--max-model-len 8192 --tensor-parallel-size {TENSOR_PARALLEL_SIZE} --disable_chunked_mm_input'"
     )
     return cmd
 
@@ -298,7 +365,7 @@ async def destroy_queued_resource(resource_id: str) -> str:
 
 
 @mcp.tool()
-async def manage_queued_resource(resource_id: str = "vllm-gemma4-qr") -> str:
+async def manage_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
     """Ensures the primary Queued Resource exists and cleans up redundant ones."""
     list_cmd = [
         "gcloud",
@@ -383,7 +450,7 @@ async def manage_queued_resource(resource_id: str = "vllm-gemma4-qr") -> str:
 
 
 @mcp.tool()
-async def manage_vllm_docker(resource_id: str = "vllm-gemma4-qr", action: str = "start") -> str:
+async def manage_vllm_docker(resource_id: str = DEFAULT_RESOURCE_ID, action: str = "start") -> str:
     """Manages the vLLM Docker container on the TPU VM."""
     node_id = await _get_node_id(resource_id)
     if not node_id:
@@ -395,10 +462,13 @@ async def manage_vllm_docker(resource_id: str = "vllm-gemma4-qr", action: str = 
         f"sudo docker run --name vllm-gemma4 --privileged --net=host -d "
         f"-v /dev/shm:/dev/shm --shm-size 10gb "
         f"-e HF_HOME=/dev/shm -e HF_TOKEN=$(gcloud secrets versions access latest --secret=hf-token) "
+        f"-e JAX_TPU_MEM_FRACTION=0.90 "
+        f"-e SKIP_JAX_PRECOMPILE=1 "
         f"{docker_image} vllm serve {MODEL_NAME} "
-        f"--tensor-parallel-size {TENSOR_PARALLEL_SIZE} --disable_chunked_mm_input --max_model_len=65536 "
+        f"--tensor-parallel-size {TENSOR_PARALLEL_SIZE} --disable_chunked_mm_input --max_model_len=8192 "
         f"--max-num_batched_tokens 4096 --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 "
-        f'--limit-mm-per-prompt \'{{"image":0,"audio":0}}\''
+        f"--quantization None --kv-cache-dtype fp8 --gpu-memory-utilization 0.88 --speculative-config '{{\"model\":\"google/gemma-4-12B-it-assistant\",\"num_speculative_tokens\":4}}' "
+        f'--limit-mm-per-prompt \'{{"image":4,"audio":1}}\''
     )
 
     commands = {
@@ -456,7 +526,7 @@ async def list_queued_resources(zone: str = ZONE) -> str:
 
 
 @mcp.tool()
-async def describe_queued_resource(resource_id: str = "vllm-gemma4-qr", zone: str = ZONE) -> str:
+async def describe_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID, zone: str = ZONE) -> str:
     """Provides detailed information about a specific Queued Resource."""
     cmd = [
         "gcloud",
@@ -491,7 +561,7 @@ async def describe_queued_resource(resource_id: str = "vllm-gemma4-qr", zone: st
 
 
 @mcp.tool()
-async def get_reservation_status(resource_id: str = "vllm-gemma4-qr") -> str:
+async def get_reservation_status(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
     """Checks the lifecycle state and expiry time of a Queued Resource."""
     # This function can be simplified if `describe_queued_resource` is sufficient
     return await describe_queued_resource(resource_id)
@@ -592,9 +662,10 @@ async def query_queued_gemma4(prompt: str) -> str:
     logger.info(f"Querying model with prompt: '{prompt[:50]}...'")
     try:
         client = await get_vllm_client()
+        active_model = await get_active_model_name(client)
         chat_completion = await client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model=MODEL_NAME,
+            model=active_model,
         )
         response = chat_completion.choices[0].message.content or "No response from model."
         logger.info(f"Model response: '{response[:100]}...'")
@@ -618,6 +689,7 @@ async def query_queued_gemma4_with_stats(prompt: str) -> str:
     logger.info(f"Querying model with stats with prompt: '{prompt[:50]}...'")
     try:
         client = await get_vllm_client()
+        active_model = await get_active_model_name(client)
 
         start_time = time.monotonic()
         ttft = None
@@ -626,7 +698,7 @@ async def query_queued_gemma4_with_stats(prompt: str) -> str:
 
         stream = await client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model=MODEL_NAME,
+            model=active_model,
             stream=True,
         )
 
@@ -667,7 +739,7 @@ async def query_queued_gemma4_with_stats(prompt: str) -> str:
 
 @mcp.tool()
 async def run_vllm_benchmark(
-    resource_id: str = "vllm-gemma4-qr",
+    resource_id: str = DEFAULT_RESOURCE_ID,
     backend: str = "vllm",
     model: str = "google/gemma-4-31B-it",
     dataset_name: str = "random",
@@ -724,7 +796,7 @@ Output: {out}"""
 
 
 @mcp.tool()
-async def get_vllm_docker_logs(resource_id: str = "vllm-gemma4-qr", tail: Optional[int] = None) -> str:
+async def get_vllm_docker_logs(resource_id: str = DEFAULT_RESOURCE_ID, tail: Optional[int] = None) -> str:
     """Retrieves logs from the vLLM Docker container on the TPU VM."""
     node_id = await _get_node_id(resource_id)
     if not node_id:
@@ -757,7 +829,7 @@ Error: {err}"""
 
 @mcp.tool()
 async def get_tpu_system_logs(
-    resource_id: str = "vllm-gemma4-qr", service: str = "docker", tail: Optional[int] = None
+    resource_id: str = DEFAULT_RESOURCE_ID, service: str = "docker", tail: Optional[int] = None
 ) -> str:
     """Retrieves systemd logs for a specific service from the TPU VM."""
     node_id = await _get_node_id(resource_id)
@@ -1008,6 +1080,73 @@ async def get_model_show_details(model_name: str) -> str:
     if rc != 0:
         return f"⚠️ Failed to get model details for {model_name}.\nError: {err}\nOutput: {out}"
     return f"### 🧩 Model Details for `{model_name}`:\n\n```\n{out}\n```"
+
+
+@mcp.tool()
+async def start_v6e1(tpu_id: str = DEFAULT_RESOURCE_ID) -> str:
+    """
+    Starts the TPU VM node.
+    """
+    cmd = [
+        "gcloud",
+        "compute",
+        "tpus",
+        "tpu-vm",
+        "start",
+        tpu_id,
+        f"--project={PROJECT_ID}",
+        f"--zone={ZONE}",
+    ]
+    logger.info(f"Starting TPU VM node {tpu_id} in {ZONE}...")
+    rc, out, err = await run_command(cmd, timeout=300)
+    if rc != 0:
+        return f"❌ Failed to start TPU VM node {tpu_id}.\nError: {err}\nOutput: {out}"
+    return f"✅ Successfully started TPU VM node {tpu_id}.\nOutput: {out}"
+
+
+@mcp.tool()
+async def stop_v6e1(tpu_id: str = DEFAULT_RESOURCE_ID) -> str:
+    """
+    Stops the TPU VM node.
+    """
+    cmd = [
+        "gcloud",
+        "compute",
+        "tpus",
+        "tpu-vm",
+        "stop",
+        tpu_id,
+        f"--project={PROJECT_ID}",
+        f"--zone={ZONE}",
+    ]
+    logger.info(f"Stopping TPU VM node {tpu_id} in {ZONE}...")
+    rc, out, err = await run_command(cmd, timeout=300)
+    if rc != 0:
+        return f"❌ Failed to stop TPU VM node {tpu_id}.\nError: {err}\nOutput: {out}"
+    return f"✅ Successfully stopped TPU VM node {tpu_id}.\nOutput: {out}"
+
+
+@mcp.tool()
+async def status_v6e1(tpu_id: str = DEFAULT_RESOURCE_ID) -> str:
+    """
+    Retrieves status and configuration details for the TPU VM node.
+    """
+    cmd = [
+        "gcloud",
+        "compute",
+        "tpus",
+        "tpu-vm",
+        "describe",
+        tpu_id,
+        f"--project={PROJECT_ID}",
+        f"--zone={ZONE}",
+        "--format=json",
+    ]
+    logger.info(f"Getting status for TPU VM node {tpu_id} in {ZONE}...")
+    rc, out, err = await run_command(cmd, timeout=60)
+    if rc != 0:
+        return f"❌ Failed to get status for TPU VM node {tpu_id}.\nError: {err}\nOutput: {out}"
+    return f"📋 TPU VM node {tpu_id} Status:\n\n```json\n{out}\n```"
 
 
 if __name__ == "__main__":

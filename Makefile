@@ -9,7 +9,8 @@ SUBDIRS := gpu-26B-6000-devops-agent \
            gpu-vllm-devops-agent \
            local-devops-agent \
            tpu-26B-devops-agent \
-           tpu-31B-devops-agent
+           tpu-31B-devops-agent \
+           tpu-12B-v6e1-devops-agent
 
 .PHONY: all clean test lint install deploy $(SUBDIRS)
 

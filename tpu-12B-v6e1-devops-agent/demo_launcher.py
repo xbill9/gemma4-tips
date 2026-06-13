@@ -30,8 +30,8 @@ async def devops_demo():
     # Step 3: Deployment Config & TPU instructions
     print("\n[Step 3] Generating TPU v6e (Trillium) Deployment Config...")
     config = await get_vllm_deployment_config(
-        service_name="tpu-12B-qat-v6e1-devops-agent",
-        model_name="google/gemma-4-12B-it-qat-w4a16-ct",
+        service_name="tpu-12B-v6e1",
+        model_name="google/gemma-4-12B-it",
     )
     print(config)
 

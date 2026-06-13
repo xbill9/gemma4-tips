@@ -7,11 +7,14 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q
 fi
 
 # Get current project
-if [ -f "$HOME/project_id.txt" ]; then
-    PROJECT_ID=$(cat "$HOME/project_id.txt")
+PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" == "(unset)" ]; then
+    if [ -f "$HOME/project_id.txt" ]; then
+        PROJECT_ID=$(cat "$HOME/project_id.txt")
+    fi
 fi
 
-if [ "$PROJECT_ID" == "(unset)" ] || [ -z "$PROJECT_ID" ]; then
+if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" == "(unset)" ]; then
     echo "Warning: No gcloud project is currently set."
     echo "Run 'gcloud config set project [PROJECT_ID]' to configure it."
 fi
@@ -31,11 +34,12 @@ export MCP_SERVER_URL=https://mcp-https-python-wgcq55zbfq-rj.a.run.app/mcp
 cat <<EOF > .env
 GOOGLE_GENAI_USE_VERTEXAI=true
 GOOGLE_CLOUD_PROJECT=$PROJECT_ID
-GOOGLE_CLOUD_LOCATION=europe-west4
-GOOGLE_CLOUD_REGION=europe-west4
-GOOGLE_CLOUD_ZONE=europe-west4-a
-MODEL=google/gemma-4-12B-it-qat-w4a16-ct
-MODEL_NAME=google/gemma-4-12B-it-qat-w4a16-ct
+GOOGLE_CLOUD_LOCATION=us-east5
+GOOGLE_CLOUD_REGION=us-east5
+GOOGLE_CLOUD_ZONE=us-east5-a
+DEFAULT_RESOURCE_ID=node-1
+MODEL=google/gemma-4-12B-it
+MODEL_NAME=google/gemma-4-12B-it
 GENAI_MODEL="gemini-2.5-flash"
 GOOGLE_API_KEY=$GOOGLE_API_KEY
 GEMINI_API_KEY=$GOOGLE_API_KEY

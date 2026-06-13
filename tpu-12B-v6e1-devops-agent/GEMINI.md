@@ -10,7 +10,7 @@ This project provides an automated DevOps/SRE assistant that leverages **Gemma 4
 ## 🟢 Current Status: ONLINE
 The Gemma 4 inference stack is currently deployed and active on TPU v6e-1.
 *   **Active Endpoint:** `http://YOUR_TPU_IP_ADDRESS:8000`
-*   **Model:** `google/gemma-4-12B-it-qat-w4a16-ct`
+*   **Model:** `google/gemma-4-12B-it`
 
 vLLM recipes
 * https://github.com/AI-Hypercomputer/tpu-recipes/blob/main/inference/trillium/vLLM/Gemma4/README.md
@@ -28,7 +28,7 @@ To deploy and run this project, you need to address two main components: the **I
 The MCP server expects a running vLLM instance. Your TPU deployment for the model needs:
 *   **Hardware:** Cloud TPU v6e (Trillium) with topology `1x1` (1 chip).
 *   **Software:** `vllm/vllm-tpu:nightly` specialized container (v0.19.2+ recommended for Gemma 4 fixes).
-*   **Model:** `google/gemma-4-12B-it-qat-w4a16-ct` (Hugging Face ID).
+*   **Model:** `google/gemma-4-12B-it` (Hugging Face ID).
 *   **Runtime:** `v2-alpha-tpuv6e` for Flex-start / Queued Resources.
 *   **Networking:** Private Google Access must be enabled for internal connectivity, or direct internet access for Hugging Face downloads.
 
@@ -43,7 +43,7 @@ The agent relies on several Google Cloud services and Python libraries:
 ### 3. Environment Variables
 You can configure the following variables for the MCP server:
 *   `GOOGLE_CLOUD_PROJECT`: Your GCP Project ID (defaults to `aisprint-491218`).
-*   `MODEL_NAME`: The model identifier used by vLLM (defaults to `google/gemma-4-12B-it-qat-w4a16-ct`).
+*   `MODEL_NAME`: The model identifier used by vLLM (defaults to `google/gemma-4-12B-it`).
 
 ## Technical Standards
 -   **vLLM API:** OpenAI-compatible endpoint at `/v1/chat/completions`.
@@ -98,7 +98,7 @@ Create this file to map the Gemini model names used by the CLI to your TPU endpo
 model_list:
   - model_name: "gemma4-tpu"
     litellm_params:
-      model: "openai/google/gemma-4-12B-it-qat-w4a16-ct" # Tell LiteLLM it's an OpenAI-style endpoint
+      model: "openai/google/gemma-4-12B-it" # Tell LiteLLM it's an OpenAI-style endpoint
       api_base: "http://YOUR_TPU_IP_ADDRESS:8000/v1" # Your TPU IP
       api_key: "none" # vLLM doesn't require a key by default
     router_settings:
@@ -124,7 +124,7 @@ Set these environment variables in your shell (e.g., in `~/.bashrc` or `~/.zshrc
 export GOOGLE_GEMINI_BASE_URL="http://localhost:4000"
 
 # Set the default model globally
-export GEMINI_MODEL="google/gemma-4-12B-it-qat-w4a16-ct"
+export GEMINI_MODEL="google/gemma-4-12B-it"
 
 # The CLI requires a key even if the proxy ignores it
 export GEMINI_API_KEY="local-proxy-token"
@@ -141,31 +141,40 @@ Now, every time you run `gemini`, it will be powered by your private TPU v6e clu
 The following tools are available via the MCP server:
 
 ### Infrastructure & Deployment
-*   **`orchestrate_gemma4_stack`**: Seamlessly provisions a TPU Queued Resource and deploys the optimized vLLM stack.
-*   **`get_vllm_deployment_config`**: Generates the exact `gcloud` command for manual TPU v6e deployment.
-*   **`get_vllm_tpu_deployment_config`**: Generates GKE manifests for TPU-based deployments.
-*   **`list_queued_resources`**: Lists all active and pending Queued Resources.
-*   **`describe_queued_resource`**: Fetches detailed JSON status for a specific TPU resource.
-*   **`check_tpu_availability`**: Simple check to see if a TPU resource is `ACTIVE`.
-*   **`destroy_queued_resource`**: Safely deletes a TPU resource and its node.
-*   **`manage_vllm_docker`**: Manages the vLLM Docker container on the TPU VM (`start`, `stop`, `restart`, `status`, `log`, and `rm` actions).
+*   **[`manage_queued_resource`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L368)**: Provisions or manages the queued resource (Flex-start).
+*   **[`destroy_queued_resource`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L346)**: Deletes the queued resource and its node.
+*   **[`list_queued_resources`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L505)**: Lists all active and pending Queued Resources.
+*   **[`describe_queued_resource`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L529)**: Fetches detailed status.
+*   **[`check_tpu_availability`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L571)**: Check if a TPU resource is `ACTIVE`.
+*   **[`get_reservation_status`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L564)**: Get reservation status.
+*   **[`get_vllm_deployment_config`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L293)**: Generates manual deployment config (`gcloud` command).
+*   **[`get_vllm_tpu_deployment_config`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L313)**: Generates GKE manifests for TPU deployment.
+*   **[`manage_vllm_docker`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L453)**: Manages the vLLM Docker container (`start`, `stop`, `restart`, `status`, `log`, `rm`).
+*   **[`start_v6e1`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L1086)**: Start a TPU v6e-1 instance.
+*   **[`stop_v6e1`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L1108)**: Stop a TPU v6e-1 instance.
+*   **[`status_v6e1`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L1130)**: Status of a TPU v6e-1 instance.
+*   **[`estimate_deployment_cost`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L597)**: Estimate deployment cost.
 
-### Observability & Performance
-*   **`get_system_status`**: Provides a high-level dashboard of TPU quota and vLLM health.
-*   **`check_tpu_utilization`**: Monitors real-time HBM and Tensor Core pressure via Docker logs.
-*   **`get_vllm_metrics`**: Fetches Prometheus metrics from the vLLM service.
-*   **`fetch_queued_node_logs`**: Streams startup and container logs from the TPU node.
-*   **`verify_model_health`**: Runs a deep logic check with latency reporting.
-*   **`run_load_test_benchmark`**: Performs an external load test and reports throughput and latency (Avg/P95).
-*   **`get_gemma4_full_report`**: Generates a comprehensive technical report of the entire stack.
-*   **`validate_gemma4_deployment`**: Performs a comprehensive sanity check on the stack.
-*   **`get_help`**: Provides help text and summarizes the configuration options and all available SRE/DevOps tools.
+### Observability & Diagnostics
+*   **[`get_system_status`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L618)**: High-level status dashboard of TPU node health and vLLM service.
+*   **[`get_vllm_docker_logs`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L799)**: Retrieves logs from the vLLM Docker container.
+*   **[`get_tpu_system_logs`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L831)**: Retrieves systemd logs from the TPU VM.
+*   **[`get_cloud_logging_logs`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L863)**: Fetches Google Cloud Logging logs.
+*   **[`analyze_cloud_logging`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L885)**: Summarizes TPU errors using the self-hosted Gemma 4 model.
+*   **[`get_metrics`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L1040)**: Fetches raw Prometheus metrics from the running vLLM service.
 
-### AI & Interaction
-*   **`query_queued_gemma4`**: Primary tool for interacting with the self-hosted model.
-*   **`query_vllm_with_metrics`**: Provides streaming responses with TTFT and total latency data.
-*   **`analyze_cloud_logging`**: Summarizes TPU-related errors using the self-hosted Gemma 4 model.
-*   **`save_hf_token`**: Securely saves a Hugging Face API token to GCP Secret Manager.
+### AI, Inference & Interaction
+*   **[`query_queued_gemma4`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L660)**: Query the self-hosted model.
+*   **[`query_queued_gemma4_with_stats`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L679)**: Query the model and retrieve timing/token statistics.
+*   **[`run_vllm_benchmark`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L741)**: Runs benchmarks.
+*   **[`verify_model_health`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L237)**: Runs inference health checks with a simple prompt.
+*   **[`get_model_details`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L906)**: Get detailed model information.
+*   **[`get_active_models`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L1060)**: List active models serving on the endpoint.
+*   **[`get_model_show_details`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L1073)**: Show details of a specific model.
+*   **[`get_vllm_endpoint`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L644)**: Returns the active service URL.
+*   **[`get_deployed_endpoint`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L653)**: Returns the deployed endpoint URL.
+*   **[`save_hf_token`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L265)**: Saves Hugging Face API token to GCP Secret Manager.
+*   **[`get_help`](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/server.py#L987)**: Provides help text and summarizes the configuration options and all available SRE/DevOps tools.
 
 ## 🌟 Grand Demo
 A standalone demo script is included to showcase the agent's capabilities:

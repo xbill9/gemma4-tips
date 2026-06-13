@@ -36,13 +36,16 @@ from server import (  # noqa: E402
     query_queued_gemma4_with_stats,
     save_hf_token,
     verify_model_health,
+    start_v6e1,
+    stop_v6e1,
+    status_v6e1,
 )
 
 
 class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
     def test_model_name_default(self):
         """Verify the default model is Gemma 4."""
-        self.assertEqual(MODEL_NAME, "google/gemma-4-12B-it-qat-w4a16-ct")
+        self.assertEqual(MODEL_NAME, "google/gemma-4-12B-it")
 
     @patch("server.get_secret", new_callable=AsyncMock)
     @patch("server.run_command", new_callable=AsyncMock)
@@ -53,14 +56,14 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         mock_run_command.return_value = 0, "", ""
 
         config = await get_vllm_deployment_config(
-            service_name="test-vllm", model_name="google/gemma-4-12B-it-qat-w4a16-ct"
+            service_name="test-vllm", model_name="google/gemma-4-12B-it"
         )
         self.assertIn("gcloud alpha compute tpus tpu-vm create test-vllm", config)
         self.assertIn("--accelerator-type=v6e-1", config)
         self.assertIn("--version=v2-alpha-tpuv6e", config)
 
         self.assertIn("vllm/vllm-tpu:nightly", config)
-        self.assertIn("google/gemma-4-12B-it-qat-w4a16-ct", config)
+        self.assertIn("google/gemma-4-12B-it", config)
 
     @patch("server.get_vllm_client", new_callable=AsyncMock)
     @patch("server.discover_vllm_url", new_callable=AsyncMock)
@@ -193,6 +196,32 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("MODEL_NAME", result)
         self.assertIn("ACCELERATOR_TYPE", result)
         self.assertIn("Available MCP Tools", result)
+
+    @patch("server.run_command", new_callable=AsyncMock)
+    async def test_start_v6e1(self, mock_run_cmd):
+        """Test start_v6e1 tool."""
+        mock_run_cmd.return_value = (0, "Started successfully", "")
+        result = await start_v6e1("node-1")
+        self.assertIn("Successfully started TPU VM node node-1", result)
+        mock_run_cmd.assert_called_once()
+
+    @patch("server.run_command", new_callable=AsyncMock)
+    async def test_stop_v6e1(self, mock_run_cmd):
+        """Test stop_v6e1 tool."""
+        mock_run_cmd.return_value = (0, "Stopped successfully", "")
+        result = await stop_v6e1("node-1")
+        self.assertIn("Successfully stopped TPU VM node node-1", result)
+        mock_run_cmd.assert_called_once()
+
+
+    @patch("server.run_command", new_callable=AsyncMock)
+    async def test_status_v6e1(self, mock_run_cmd):
+        """Test status_v6e1 tool."""
+        mock_run_cmd.return_value = (0, '{"state": "READY"}', "")
+        result = await status_v6e1("node-1")
+        self.assertIn("TPU VM node node-1 Status:", result)
+        self.assertIn('"state": "READY"', result)
+        mock_run_cmd.assert_called_once()
 
 
 if __name__ == "__main__":
