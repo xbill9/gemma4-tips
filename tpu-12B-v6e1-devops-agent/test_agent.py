@@ -29,16 +29,18 @@ sys.modules["google.cloud.secretmanager"] = MagicMock()
 # Now import the functions to test
 from server import (  # noqa: E402
     MODEL_NAME,
+    find_tpu,
     get_help,
     get_metrics,
     get_model_details,
     get_vllm_deployment_config,
+    get_zones_with_available_quota,
     query_queued_gemma4_with_stats,
     save_hf_token,
-    verify_model_health,
     start_v6e1,
-    stop_v6e1,
     status_v6e1,
+    stop_v6e1,
+    verify_model_health,
 )
 
 
@@ -55,9 +57,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         # Mock run_command to prevent actual gcloud calls during this test
         mock_run_command.return_value = 0, "", ""
 
-        config = await get_vllm_deployment_config(
-            service_name="test-vllm", model_name="google/gemma-4-12B-it"
-        )
+        config = await get_vllm_deployment_config(service_name="test-vllm", model_name="google/gemma-4-12B-it")
         self.assertIn("gcloud alpha compute tpus tpu-vm create test-vllm", config)
         self.assertIn("--accelerator-type=v6e-1", config)
         self.assertIn("--version=v2-alpha-tpuv6e", config)
@@ -213,7 +213,6 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Successfully stopped TPU VM node node-1", result)
         mock_run_cmd.assert_called_once()
 
-
     @patch("server.run_command", new_callable=AsyncMock)
     async def test_status_v6e1(self, mock_run_cmd):
         """Test status_v6e1 tool."""
@@ -222,6 +221,49 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("TPU VM node node-1 Status:", result)
         self.assertIn('"state": "READY"', result)
         mock_run_cmd.assert_called_once()
+
+    @patch("server.run_command", new_callable=AsyncMock)
+    async def test_get_zones_with_available_quota(self, mock_run_cmd):
+        """Test get_zones_with_available_quota."""
+        import json
+
+        quota_response = [
+            {
+                "quotaId": "TPUV6EPerProjectPerZoneForTPUAPI",
+                "dimensionsInfos": [{"details": {"value": "8"}, "dimensions": {"zone": "us-east5-a"}}],
+            }
+        ]
+        mock_run_cmd.return_value = (0, json.dumps(quota_response), "")
+        result = await get_zones_with_available_quota()
+        self.assertIn("us-east5-a", result)
+
+    @patch("server.os.path.exists", return_value=False)
+    @patch("server.asyncio.sleep", new_callable=AsyncMock)
+    @patch("server.run_command", new_callable=AsyncMock)
+    @patch("server._get_zones_with_available_quota_list", new_callable=AsyncMock)
+    @patch("server.create_tpu_queued_resource", new_callable=AsyncMock)
+    async def test_find_tpu_success(self, mock_create, mock_get_zones, mock_run_command, mock_sleep, mock_exists):
+        """Test find_tpu successfully starts a TPU in the first zone."""
+        mock_get_zones.return_value = ["us-east5-a", "us-east5-b"]
+        mock_create.return_value = "🚀 Primary resource node-1 creation initiated"
+        mock_run_command.return_value = (0, "ACTIVE", "")
+        result = await find_tpu("node-1")
+        self.assertIn("Successfully initiated and secured TPU in zone `us-east5-a`", result)
+        mock_create.assert_called_once_with(resource_id="node-1", zone="us-east5-a")
+
+    @patch("server.os.path.exists", return_value=False)
+    @patch("server.asyncio.sleep", new_callable=AsyncMock)
+    @patch("server.run_command", new_callable=AsyncMock)
+    @patch("server._get_zones_with_available_quota_list", new_callable=AsyncMock)
+    @patch("server.create_tpu_queued_resource", new_callable=AsyncMock)
+    async def test_find_tpu_fallback(self, mock_create, mock_get_zones, mock_run_command, mock_sleep, mock_exists):
+        """Test find_tpu falls back to the second zone when the first fails."""
+        mock_get_zones.return_value = ["us-east5-a", "us-east5-b"]
+        mock_create.side_effect = ["❌ Creation failed", "🚀 Primary resource node-1 creation initiated"]
+        mock_run_command.return_value = (0, "ACTIVE", "")
+        result = await find_tpu("node-1")
+        self.assertIn("Successfully initiated and secured TPU in zone `us-east5-b`", result)
+        self.assertEqual(mock_create.call_count, 2)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,6 @@ import time
 from typing import Optional
 
 import httpx
-from google.cloud import secretmanager
 from mcp.server.fastmcp import FastMCP
 from openai import AsyncOpenAI
 
@@ -23,8 +22,26 @@ mcp = FastMCP("tpu-12B-v6e1")
 
 # --- Configuration ---
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "aisprint-491218")
-ZONE = os.getenv("GOOGLE_CLOUD_ZONE", "us-east5-a")
-REGION = os.getenv("GOOGLE_CLOUD_REGION", "us-east5")
+
+
+def get_zone() -> str:
+    status_file = os.path.join(os.path.dirname(__file__), "tpu_zones_status.md")
+    if os.path.exists(status_file):
+        try:
+            with open(status_file, "r") as f:
+                content = f.read()
+            import re
+
+            match = re.search(r"-\s+\*\*Successful Zone:\*\*\s+`([^`]+)`", content)
+            if match:
+                return match.group(1).strip()
+        except Exception as e:
+            logger.warning(f"Failed to read successful zone from status file: {e}")
+    return os.getenv("GOOGLE_CLOUD_ZONE", "us-east5-a")
+
+
+ZONE = get_zone()
+REGION = "-".join(ZONE.split("-")[:-1]) if "-" in ZONE else ZONE
 DEFAULT_RESOURCE_ID = os.getenv("DEFAULT_RESOURCE_ID", "node-1")
 MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-12B-it")
 HF_SECRET_ID = "hf-token"
@@ -55,7 +72,7 @@ async def run_command(cmd: list[str], timeout: int = 60) -> tuple[int, str, str]
         return -1, "", str(e)
 
 
-async def _get_node_id(resource_id: str) -> Optional[str]:
+async def _get_node_id(resource_id: str, zone: str = ZONE) -> Optional[str]:
     """Retrieves the node ID for a given Queued Resource, falling back to checking if it is a direct TPU VM name."""
     cmd = [
         "gcloud",
@@ -66,7 +83,7 @@ async def _get_node_id(resource_id: str) -> Optional[str]:
         "describe",
         resource_id,
         f"--project={PROJECT_ID}",
-        f"--zone={ZONE}",
+        f"--zone={zone}",
         "--format=value(tpu.nodeSpec[0].nodeId)",
     ]
     rc, node_id, _ = await run_command(cmd)
@@ -82,7 +99,7 @@ async def _get_node_id(resource_id: str) -> Optional[str]:
         "describe",
         resource_id,
         f"--project={PROJECT_ID}",
-        f"--zone={ZONE}",
+        f"--zone={zone}",
         "--format=value(name)",
     ]
     rc2, vm_name, _ = await run_command(check_vm_cmd)
@@ -92,7 +109,7 @@ async def _get_node_id(resource_id: str) -> Optional[str]:
     return None
 
 
-async def _get_node_ip(node_id: str) -> Optional[str]:
+async def _get_node_ip(node_id: str, zone: str = ZONE) -> Optional[str]:
     """Gets the external or internal IP of a TPU node."""
     cmd = [
         "gcloud",
@@ -102,7 +119,7 @@ async def _get_node_ip(node_id: str) -> Optional[str]:
         "describe",
         node_id,
         f"--project={PROJECT_ID}",
-        f"--zone={ZONE}",
+        f"--zone={zone}",
         "--format=value(networkEndpoints[0].accessConfig.externalIp)",
     ]
     rc, ip, _ = await run_command(cmd)
@@ -117,13 +134,19 @@ async def _get_node_ip(node_id: str) -> Optional[str]:
 
 async def get_secret(secret_id: str = HF_SECRET_ID) -> Optional[str]:
     """Retrieves a secret from Secret Manager."""
-    client = secretmanager.SecretManagerServiceClient()
-    name = f"projects/{PROJECT_ID}/secrets/{secret_id}/versions/latest"
-    try:
-        response = await asyncio.to_thread(client.access_secret_version, request={"name": name})
-        return response.payload.data.decode("UTF-8")
-    except Exception:
-        return None
+    cmd = [
+        "gcloud",
+        "secrets",
+        "versions",
+        "access",
+        "latest",
+        f"--secret={secret_id}",
+        f"--project={PROJECT_ID}",
+    ]
+    rc, stdout, stderr = await run_command(cmd)
+    if rc == 0 and stdout:
+        return stdout.strip()
+    return None
 
 
 async def _get_formatted_startup_script(model_name: str, hf_token: str) -> str:
@@ -264,29 +287,50 @@ async def verify_model_health() -> str:
 @mcp.tool()
 async def save_hf_token(token: str) -> str:
     """Securely saves a Hugging Face API token to GCP Secret Manager."""
-    client = secretmanager.SecretManagerServiceClient()
-    secret_parent = f"projects/{PROJECT_ID}/secrets/{HF_SECRET_ID}"
+    describe_cmd = [
+        "gcloud",
+        "secrets",
+        "describe",
+        HF_SECRET_ID,
+        f"--project={PROJECT_ID}",
+    ]
+    rc, _, _ = await run_command(describe_cmd)
+    if rc != 0:
+        create_cmd = [
+            "gcloud",
+            "secrets",
+            "create",
+            HF_SECRET_ID,
+            f"--project={PROJECT_ID}",
+            "--replication-policy=automatic",
+        ]
+        rc_c, _, stderr_c = await run_command(create_cmd)
+        if rc_c != 0:
+            return f"❌ Failed to create secret: {stderr_c}"
 
-    try:
-        # Check if the secret already exists
-        await asyncio.to_thread(client.get_secret, request={"name": secret_parent})
-    except Exception:
-        # If not, create it
-        await asyncio.to_thread(
-            client.create_secret,
-            request={
-                "parent": f"projects/{PROJECT_ID}",
-                "secret_id": HF_SECRET_ID,
-                "secret": {"replication": {"automatic": {}}},
-            },
-        )
-
-    # Add the new version
-    response = await asyncio.to_thread(
-        client.add_secret_version,
-        request={"parent": secret_parent, "payload": {"data": token.encode("UTF-8")}},
+    process = await asyncio.create_subprocess_exec(
+        "gcloud",
+        "secrets",
+        "versions",
+        "add",
+        HF_SECRET_ID,
+        f"--project={PROJECT_ID}",
+        "--data-file=-",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    return f"✅ Token saved. Version: {response.name}"
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(input=token.encode("UTF-8")), timeout=30)
+        if process.returncode != 0:
+            return f"❌ Failed to add secret version: {stderr.decode().strip()}"
+        return f"✅ Token saved. Version: {stdout.decode().strip()}"
+    except asyncio.TimeoutError:
+        try:
+            process.kill()
+        except Exception:
+            pass
+        return "❌ Failed to add secret version: Timeout"
 
 
 @mcp.tool()
@@ -343,7 +387,7 @@ spec:
 
 
 @mcp.tool()
-async def destroy_queued_resource(resource_id: str) -> str:
+async def destroy_queued_resource(resource_id: str, zone: str = ZONE) -> str:
     """Safely deletes a Queued Resource and its node."""
     cmd = [
         "gcloud",
@@ -353,7 +397,7 @@ async def destroy_queued_resource(resource_id: str) -> str:
         "queued-resources",
         "delete",
         resource_id,
-        f"--zone={ZONE}",
+        f"--zone={zone}",
         f"--project={PROJECT_ID}",
         "--async",
         "--quiet",
@@ -365,7 +409,7 @@ async def destroy_queued_resource(resource_id: str) -> str:
 
 
 @mcp.tool()
-async def manage_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
+async def manage_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID, zone: str = ZONE) -> str:
     """Ensures the primary Queued Resource exists and cleans up redundant ones."""
     list_cmd = [
         "gcloud",
@@ -374,7 +418,7 @@ async def manage_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
         "tpus",
         "queued-resources",
         "list",
-        f"--zone={ZONE}",
+        f"--zone={zone}",
         f"--project={PROJECT_ID}",
         "--format=json",
     ]
@@ -397,13 +441,13 @@ async def manage_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
         if name == resource_id:
             if state in ["FAILED", "SUSPENDED"]:
                 logger.info(f"Primary resource {name} is {state}. Deleting to recreate.")
-                await destroy_queued_resource(name)
+                await destroy_queued_resource(name, zone=zone)
                 redundant_deleted.append(f"{name} (Failed)")
             else:
                 primary_res = res
         else:
             logger.info(f"Deleting redundant resource: {name}")
-            await destroy_queued_resource(name)
+            await destroy_queued_resource(name, zone=zone)
             redundant_deleted.append(name)
 
     if not primary_res:
@@ -424,7 +468,7 @@ async def manage_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
             "queued-resources",
             "create",
             resource_id,
-            f"--zone={ZONE}",
+            f"--zone={zone}",
             "--runtime-version=v2-alpha-tpuv6e",
             f"--node-id={resource_id}-node",
             "--provisioning-model=flex-start",
@@ -450,9 +494,224 @@ async def manage_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
 
 
 @mcp.tool()
-async def manage_vllm_docker(resource_id: str = DEFAULT_RESOURCE_ID, action: str = "start") -> str:
+async def create_tpu_queued_resource(resource_id: str = DEFAULT_RESOURCE_ID, zone: str = ZONE) -> str:
+    """Creates a TPU Queued Resource (Flex-start) with the specified configuration and zone."""
+    return await manage_queued_resource(resource_id=resource_id, zone=zone)
+
+
+async def _get_zones_with_available_quota_list(
+    service: str = "tpu.googleapis.com",
+    quota_id: str = "TPUV6EPerProjectPerZoneForTPUAPI",
+) -> list[str]:
+    """Helper to retrieve a list of GCP zones that have a non-zero quota for a specific metric."""
+    cmd = [
+        "gcloud",
+        "beta",
+        "quotas",
+        "info",
+        "list",
+        f"--service={service}",
+        f"--project={PROJECT_ID}",
+        f"--filter=quotaId:{quota_id}",
+        "--format=json",
+    ]
+    rc, stdout, stderr = await run_command(cmd)
+    if rc != 0:
+        logger.error(f"Failed to retrieve quota info: {stderr}")
+        return []
+    try:
+        quota_data = json.loads(stdout)
+    except Exception:
+        return []
+
+    zones = []
+    for info in quota_data:
+        dimensions_infos = info.get("dimensionsInfos", [])
+        for dim_info in dimensions_infos:
+            details = dim_info.get("details", {})
+            limit_val = details.get("value")
+            if limit_val and limit_val != "0":
+                dim_map = dim_info.get("dimensions", {})
+                zone_val = dim_map.get("zone") or dim_map.get("region")
+                if zone_val:
+                    zones.append(zone_val)
+                else:
+                    locations = dim_info.get("applicableLocations", [])
+                    for loc in locations:
+                        zones.append(loc)
+    return sorted(list(set(zones)))
+
+
+@mcp.tool()
+async def get_zones_with_available_quota(
+    service: str = "tpu.googleapis.com",
+    quota_id: str = "TPUV6EPerProjectPerZoneForTPUAPI",
+) -> str:
+    """
+    Retrieves a list of GCP zones that have a non-zero quota for a specific metric.
+
+    Args:
+        service: The GCP service to query (defaults to 'tpu.googleapis.com').
+        quota_id: The specific quota ID to filter by (defaults to 'TPUV6EPerProjectPerZoneForTPUAPI').
+    """
+    zones = await _get_zones_with_available_quota_list(service, quota_id)
+    if not zones:
+        return f"No zones/locations found with non-zero quota limit for `{quota_id}`."
+
+    output = [f"### 📊 Available Zones with Quota for `{quota_id}`\n"]
+    for zone in zones:
+        output.append(f"- Zone/Region `{zone}`")
+    return "\n".join(output)
+
+
+async def _update_status_file(zone: str, success_str: str, detail_str: str) -> None:
+    status_file = os.path.join(os.path.dirname(__file__), "tpu_zones_status.md")
+    if not os.path.exists(status_file):
+        return
+    try:
+        with open(status_file, "r") as f:
+            content = f.read()
+
+        import re
+
+        if success_str == "Yes":
+            content = re.sub(
+                r"- \*\*Successful Zone:\*\*.*", f"- **Successful Zone:** `{zone}` (Started, reached ACTIVE)", content
+            )
+
+        lines = content.splitlines()
+        new_lines = []
+        updated = False
+        for line in lines:
+            if f"**{zone}**" in line:
+                new_line = f"| **{zone}** | Yes | {success_str} | {detail_str} |"
+                new_lines.append(new_line)
+                updated = True
+            else:
+                new_lines.append(line)
+
+        if not updated:
+            new_lines.append(f"| **{zone}** | Yes | {success_str} | {detail_str} |")
+
+        with open(status_file, "w") as f:
+            f.write("\n".join(new_lines) + "\n")
+    except Exception as e:
+        logger.error(f"Error updating status file: {e}")
+
+
+@mcp.tool()
+async def find_tpu(
+    resource_id: str = DEFAULT_RESOURCE_ID,
+    service: str = "tpu.googleapis.com",
+    quota_id: str = "TPUV6EPerProjectPerZoneForTPUAPI",
+) -> str:
+    """
+    Finds a zone with available quota and attempts to create the TPU queued resource in that zone until successful.
+    """
+    zones = await _get_zones_with_available_quota_list(service, quota_id)
+    if not zones:
+        return f"❌ Aborted: No zones found with non-zero quota for `{quota_id}`."
+
+    # Parse flat status file to skip zones where TPU could not be started
+    skipped_zones = set()
+    status_file = os.path.join(os.path.dirname(__file__), "tpu_zones_status.md")
+    if os.path.exists(status_file):
+        try:
+            with open(status_file, "r") as f:
+                content = f.read()
+            import re
+
+            for line in content.splitlines():
+                # Matches lines like: | **zone-name** | Yes | No | ...
+                match = re.search(r"\|\s*\*\*([a-zA-Z0-9-]+)\*\*\s*\|\s*([^|]+)\|\s*No\s*\|", line)
+                if match:
+                    zone_name = match.group(1).strip()
+                    skipped_zones.add(zone_name)
+            logger.info(f"Skipping zones (marked as failed in status file): {list(skipped_zones)}")
+        except Exception as e:
+            logger.error(f"Error parsing status file: {e}")
+
+    logger.info(f"Zones with available quota: {zones}")
+
+    attempts = []
+    for zone in zones:
+        if zone in skipped_zones:
+            logger.info(f"Skipping zone {zone} as it is marked as failed in status file.")
+            attempts.append(f"- **Zone {zone}**: ⏭️ Skipped (previously failed according to status file)")
+            continue
+
+        logger.info(f"Attempting to create TPU queued resource {resource_id} in zone {zone}...")
+        result = await create_tpu_queued_resource(resource_id=resource_id, zone=zone)
+
+        if result.startswith("❌"):
+            attempts.append(f"- **Zone {zone}**: {result}")
+            reason = result.replace("❌ Creation failed:", "").strip()
+            await _update_status_file(zone, "No", reason)
+            continue
+
+        # Wait up to 3 minutes (180s) or 10 minutes (600s) if it becomes PROVISIONING
+        logger.info(f"Waiting for queued resource {resource_id} in zone {zone} to become ACTIVE...")
+        success = False
+        poll_start = time.time()
+        timeout = 180
+        extended = False
+        while time.time() - poll_start < timeout:
+            await asyncio.sleep(15)
+            state_cmd = [
+                "gcloud",
+                "alpha",
+                "compute",
+                "tpus",
+                "queued-resources",
+                "describe",
+                resource_id,
+                f"--zone={zone}",
+                f"--project={PROJECT_ID}",
+                "--format=value(state.state)",
+            ]
+            rc_s, stdout_s, stderr_s = await run_command(state_cmd)
+            if rc_s == 0:
+                current_state = stdout_s.strip()
+                logger.info(f"Queued resource {resource_id} state in {zone}: {current_state}")
+                if current_state == "ACTIVE":
+                    success = True
+                    break
+                elif current_state == "PROVISIONING" and not extended:
+                    logger.info("Resource is PROVISIONING. Extending timeout to 10 minutes (600 seconds) from start.")
+                    timeout = 600
+                    extended = True
+                elif current_state in ["FAILED", "SUSPENDED"]:
+                    logger.info(f"Queued resource {resource_id} reached failed/suspended state: {current_state}")
+                    break
+            else:
+                logger.warning(f"Failed to check state: {stderr_s or stdout_s}")
+
+        if success:
+            await _update_status_file(zone, "Yes", "Successfully started and reached ACTIVE state.")
+            attempts.append(f"- **Zone {zone}**: ✅ Successfully created and reached ACTIVE state.")
+            return (
+                f"✅ Successfully initiated and secured TPU in zone `{zone}`!\n\n"
+                f"**Creation Output:**\n{result}\n\n"
+                f"**Attempts Log:**\n" + "\n".join(attempts)
+            )
+        else:
+            logger.info(f"Timed out or failed waiting for TPU in {zone} to become ACTIVE. Deleting queued resource...")
+            await destroy_queued_resource(resource_id, zone=zone)
+            timeout_msg = (
+                "Timed out waiting 10 minutes to reach ACTIVE state (reached PROVISIONING)."
+                if extended
+                else "Timed out waiting 3 minutes to reach ACTIVE state."
+            )
+            await _update_status_file(zone, "No", timeout_msg)
+            attempts.append(f"- **Zone {zone}**: ❌ {timeout_msg}")
+
+    return "❌ Failed to start TPU in any zone. Attempted zones:\n" + "\n".join(attempts)
+
+
+@mcp.tool()
+async def manage_vllm_docker(resource_id: str = DEFAULT_RESOURCE_ID, action: str = "start", zone: str = ZONE) -> str:
     """Manages the vLLM Docker container on the TPU VM."""
-    node_id = await _get_node_id(resource_id)
+    node_id = await _get_node_id(resource_id, zone=zone)
     if not node_id:
         return f"❌ Could not find node for resource {resource_id}. Ensure it is ACTIVE."
 
@@ -461,14 +720,16 @@ async def manage_vllm_docker(resource_id: str = DEFAULT_RESOURCE_ID, action: str
     docker_run_cmd = (
         f"sudo docker run --name vllm-gemma4 --privileged --net=host -d "
         f"-v /dev/shm:/dev/shm --shm-size 10gb "
-        f"-e HF_HOME=/dev/shm -e HF_TOKEN=$(gcloud secrets versions access latest --secret=hf-token) "
-        f"-e JAX_TPU_MEM_FRACTION=0.90 "
-        f"-e SKIP_JAX_PRECOMPILE=1 "
-        f"{docker_image} vllm serve {MODEL_NAME} "
-        f"--tensor-parallel-size {TENSOR_PARALLEL_SIZE} --disable_chunked_mm_input --max_model_len=8192 "
-        f"--max-num_batched_tokens 4096 --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 "
-        f"--quantization None --kv-cache-dtype fp8 --gpu-memory-utilization 0.88 --speculative-config '{{\"model\":\"google/gemma-4-12B-it-assistant\",\"num_speculative_tokens\":4}}' "
-        f'--limit-mm-per-prompt \'{{"image":4,"audio":1}}\''
+        f"-e HF_HOME=/dev/shm -e HF_TOKEN=\$(gcloud secrets versions access latest --secret=hf-token) "
+        f"-e VLLM_TPU_BUCKET_PADDING_GAP=512 "
+        f"-e VLLM_XLA_CACHE_PATH=/dev/shm/vllm_cache "
+        f"-e JAX_TPU_MEM_FRACTION=0.95 "
+        f"{docker_image} /bin/bash -c 'pip install git+https://github.com/huggingface/transformers.git && vllm serve {MODEL_NAME} "
+        f"--tensor-parallel-size {TENSOR_PARALLEL_SIZE} --dtype bfloat16 --kv-cache-dtype fp8 --gpu-memory-utilization 0.85 --block-size 32 --disable_chunked_mm_input --max_model_len 4096 "
+        f"--trust-remote-code --max-num-batched-tokens 4096 "
+        f"--enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 "
+        f"--enable-prefix-caching --max-num-seqs 64 "
+        f"--limit-mm-per-prompt '\\''{{\"image\":4,\"audio\":1}}'\\'' --safetensors-load-strategy prefetch'"
     )
 
     commands = {
@@ -487,7 +748,7 @@ async def manage_vllm_docker(resource_id: str = DEFAULT_RESOURCE_ID, action: str
         "tpu-vm",
         "ssh",
         node_id,
-        f"--zone={ZONE}",
+        f"--zone={zone}",
         f"--project={PROJECT_ID}",
         "--command",
         commands.get(action, commands["status"]),
@@ -568,7 +829,7 @@ async def get_reservation_status(resource_id: str = DEFAULT_RESOURCE_ID) -> str:
 
 
 @mcp.tool()
-async def check_tpu_availability(resource_id: str) -> str:
+async def check_tpu_availability(resource_id: str, zone: str = ZONE) -> str:
     """Simple check to see if a Queued Resource has reached ACTIVE state."""
     cmd = [
         "gcloud",
@@ -578,7 +839,7 @@ async def check_tpu_availability(resource_id: str) -> str:
         "queued-resources",
         "describe",
         resource_id,
-        f"--zone={ZONE}",
+        f"--zone={zone}",
         f"--project={PROJECT_ID}",
         "--format=value(state.state)",
     ]

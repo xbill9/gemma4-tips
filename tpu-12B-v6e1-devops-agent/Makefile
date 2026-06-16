@@ -133,4 +133,9 @@ help:
 	@echo "  verify_model_health              - Performs a deep health check by querying the model with a simple prompt."
 	@echo "  query_vllm_with_metrics          - Queries the model and provides streaming-based performance metrics."
 	@echo "  get_vllm_model_stats             - Aggregates model-specific statistics from the vLLM server."
+	@echo "  find_tpu                         - Finds a zone with available quota and attempts to create the TPU queued resource."
+	@echo "  start_v6e1                       - Starts a TPU v6e-1 instance."
+	@echo "  stop_v6e1                        - Stops a TPU v6e-1 instance."
+	@echo "  status_v6e1                      - Retrieves status and configuration details for the TPU VM node."
+	@echo "  get_help                         - Provides help text and summarizes the configuration options and tools."
 
