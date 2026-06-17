@@ -34,3 +34,7 @@ coverage.xml
 .DS_Store
 .vscode/
 .idea/
+
+# Temp files / secrets
+temp_startup_script.sh
+

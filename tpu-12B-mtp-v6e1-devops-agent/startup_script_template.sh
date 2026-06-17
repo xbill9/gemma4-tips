@@ -4,9 +4,9 @@ set -ex # Enable command tracing and exit on error
 
 echo "Starting Queued vLLM Bootloader..."
 echo "-----------------------------------"
-echo "Project ID: aisprint-491218"
-echo "Zone: europe-west4-a"
-echo "Model Name: google/gemma-4-31B-it"
+echo "Project ID: {project_id}"
+echo "Zone: {zone}"
+echo "Model Name: {model_name}"
 echo "HF_SECRET_ID: hf-token"
 echo "-----------------------------------"
 
@@ -50,19 +50,19 @@ set -e # Re-enable exit on error
 
 # Set vLLM environment variables
 echo "Setting vLLM environment variables..."
-VLLM_MODEL="google/gemma-4-31B-it"
-VLLM_MAX_MODEL_LEN="65536"
-VLLM_TP_SIZE="4"
+VLLM_MODEL="{model_name}"
+VLLM_MAX_MODEL_LEN="4096"
+VLLM_TP_SIZE="1"
 VLLM_MAX_BATCHED_TOKENS="4096"
-export VLLM_LIMIT_MM_PER_PROMPT='{"image":4,"audio":1}'
+{limit_mm_per_prompt_env}
 HF_HOME="/dev/shm"
-HF_TOKEN="test-token" # This will be sensitive, ensure it's quoted and not directly echoed for logs
+HF_TOKEN="{hf_token}" # This will be sensitive, ensure it's quoted and not directly echoed for logs
 
 echo "VLLM_MODEL set to: $VLLM_MODEL"
 echo "VLLM_MAX_MODEL_LEN set to: $VLLM_MAX_MODEL_LEN"
 echo "VLLM_TP_SIZE set to: $VLLM_TP_SIZE"
 echo "VLLM_MAX_BATCHED_TOKENS set to: $VLLM_MAX_BATCHED_TOKENS"
-if [ -n "export VLLM_LIMIT_MM_PER_PROMPT='{"image":4,"audio":1}'" ]; then
+if [ -n "{limit_mm_per_prompt_env}" ]; then
   echo "VLLM_LIMIT_MM_PER_PROMPT set." # Don't echo actual value for sensitive info
 fi
 echo "HF_HOME set to: $HF_HOME"
@@ -78,29 +78,29 @@ echo "Executing command: sudo docker run --name vllm-gemma4 --privileged --net=h
   -v /dev/shm:/dev/shm --shm-size 10gb \\
   -e HF_HOME=\"$HF_HOME\" \\
   -e HF_TOKEN=\"$HF_TOKEN\" \\
-  vllm/vllm-tpu:nightly vllm serve \"$VLLM_MODEL\" \\
-  --max-model-len \"$VLLM_MAX_MODEL_LEN\" \\
-  --tensor-parallel-size \"$VLLM_TP_SIZE\" \\
-  --disable_chunked_mm_input \\
-  --max_num_batched_tokens 4096 \\
-  --enable-auto-tool-choice \\
-  --tool-call-parser gemma4 \\
-  --reasoning-parser gemma4 \\
-  --verbose"
+  -e VLLM_TPU_BUCKET_PADDING_GAP=512 \\
+  -e VLLM_XLA_CACHE_PATH=/dev/shm/vllm_cache \\
+  -e JAX_TPU_MEM_FRACTION=0.95 \\
+  vllm/vllm-tpu:nightly /bin/bash -c 'pip install git+https://github.com/huggingface/transformers.git && vllm serve \"$VLLM_MODEL\" \\
+  --tensor-parallel-size \"$VLLM_TP_SIZE\" --dtype bfloat16 --kv-cache-dtype fp8 --gpu-memory-utilization 0.85 --block-size 32 --disable_chunked_mm_input --max_model_len \"$VLLM_MAX_MODEL_LEN\" \\
+  --trust-remote-code --max-num-batched-tokens 4096 \\
+  --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 \\
+  --enable-prefix-caching --max-num-seqs 64 \\
+  --limit-mm-per-prompt '\''{{\"image\":4,\"audio\":1}}'\'' --safetensors-load-strategy prefetch'"
 
 sudo docker run --name vllm-gemma4 --privileged --net=host -d \
   -v /dev/shm:/dev/shm --shm-size 10gb \
   -e HF_HOME="$HF_HOME" \
   -e HF_TOKEN="$HF_TOKEN" \
-  vllm/vllm-tpu:nightly vllm serve "$VLLM_MODEL" \
-  --max-model-len "$VLLM_MAX_MODEL_LEN" \
-  --tensor-parallel-size "$VLLM_TP_SIZE" \
-  --disable_chunked_mm_input \
-  --max_num_batched_tokens 4096 \
-  --enable-auto-tool-choice \
-  --tool-call-parser gemma4 \
-  --reasoning-parser gemma4 \
-  --verbose
+  -e VLLM_TPU_BUCKET_PADDING_GAP=512 \
+  -e VLLM_XLA_CACHE_PATH=/dev/shm/vllm_cache \
+  -e JAX_TPU_MEM_FRACTION=0.95 \
+  vllm/vllm-tpu:nightly /bin/bash -c 'pip install git+https://github.com/huggingface/transformers.git && vllm serve "'$VLLM_MODEL'" \
+  --tensor-parallel-size "'$VLLM_TP_SIZE'" --dtype bfloat16 --kv-cache-dtype fp8 --gpu-memory-utilization 0.85 --block-size 32 --disable_chunked_mm_input --max_model_len "'$VLLM_MAX_MODEL_LEN'" \
+  --trust-remote-code --max-num-batched-tokens 4096 \
+  --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 \
+  --enable-prefix-caching --max-num-seqs 64 \
+  --limit-mm-per-prompt '\''{{"image":4,"audio":1}}'\'' --safetensors-load-strategy prefetch'
 
 if [ $? -ne 0 ]; then
   echo "ERROR: Docker run command failed. Check parameters and image."
