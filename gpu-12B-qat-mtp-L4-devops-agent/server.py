@@ -74,7 +74,7 @@ async def save_hf_token(token: str) -> str:
     return f"✅ Token saved. Version: {response.name}"
 
 
-DEFAULT_SERVICE_NAME = "gpu-12b-qat-mtp"
+DEFAULT_SERVICE_NAME = "gpu-12b-qat-l4-devops-agent"
 
 
 def discover_vllm_url(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]:
@@ -240,7 +240,7 @@ def get_vllm_endpoint(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]
     Returns the current active vLLM endpoint URL.
 
     Args:
-        service_name: The Cloud Run service name to describe (defaults to 'gpu-12b-qat-mtp').
+        service_name: The Cloud Run service name to describe (defaults to 'gpu-12b-qat-l4-devops-agent').
     """
     # If it's the default service, use our cached discovery logic
     if service_name == DEFAULT_SERVICE_NAME:
@@ -399,7 +399,6 @@ def get_vllm_deployment_config(
     min_instances: int = 0,
     gpu_memory_utilization: float = 0.95,
     speculative_model: Optional[str] = None,
-    num_speculative_tokens: int = 4,
 ) -> str:
     """
     Generates the gcloud command to deploy vLLM to Cloud Run with GCS FUSE and NVIDIA L4 GPU.
@@ -411,24 +410,10 @@ def get_vllm_deployment_config(
         allow_unauthenticated: Whether to allow unauthenticated access to the service.
         min_instances: The minimum number of instances to keep warm (default: 0).
         gpu_memory_utilization: The fraction of GPU memory to use for KV cache (default: 0.95).
-        speculative_model: Optional speculative assistant model name/path (e.g. 'google/gemma-4-12B-it-assistant').
-        num_speculative_tokens: Number of speculative tokens to generate per draft step (default: 4).
+        speculative_model: The Hugging Face repo ID or GCS folder for the assistant/speculative draft model.
     """
     # Check if we are pulling directly from Hugging Face
     is_hf = "/" in model_path and not model_path.startswith("/")
-    is_spec_hf = False
-    
-    if speculative_model:
-        is_spec_hf = "/" in speculative_model and not speculative_model.startswith("/")
-
-    offline_val = "0" if (is_hf or is_spec_hf) else "1"
-    env_vars = (
-        f"VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,"
-        f"HF_HUB_OFFLINE={offline_val},TRANSFORMERS_OFFLINE={offline_val},"
-        f"VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,"
-        f"PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,"
-        f"MALLOC_TRIM_THRESHOLD_=65536"
-    )
 
     command = [
         "gcloud beta run deploy",
@@ -437,65 +422,47 @@ def get_vllm_deployment_config(
         "--command=python3,-m,vllm.entrypoints.openai.api_server",
         "--gpu=1",
         "--gpu-type=nvidia-l4",
-        "--no-gpu-zonal-redundancy",
-        "--no-cpu-throttling",
-        "--concurrency=4",
-        "--timeout=3600",
+        "--no-gpu-zonal-redundancy",  # Fix for quota issues in us-east4
+        "--no-cpu-throttling",  # Required for GPU deployment
+        "--concurrency=4",  # Optimal for LLM throughput vs latency
+        "--timeout=3600",  # 1 hour timeout for long generations
         "--startup-probe=timeoutSeconds=60,periodSeconds=60,failureThreshold=10,initialDelaySeconds=180,httpGet.port=8080,httpGet.path=/health",
-        "--max-instances=1",
+        "--max-instances=1",  # Prevent scaling beyond quota
         f"--min-instances={min_instances}",
-        "--port=8080",
+        "--port=8080",  # vLLM default port
         "--memory=16Gi",
         "--cpu=4",
         "--execution-environment=gen2",
-        f"--set-env-vars={env_vars}",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
-    if is_hf or is_spec_hf:
-        command.append(f"--set-secrets=HF_TOKEN={HF_SECRET_ID}:latest")
+    quant_arg = (
+        ",--quantization=compressed-tensors" if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]) else ""
+    )
 
-    # Construct the container args list using alternative delimiter ^|^ with |
-    args_list = [
-        f"--model={model_path}" if is_hf else f"--model=/mnt/models/{model_path}",
-    ]
-    if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]):
-        args_list.append("--quantization=compressed-tensors")
-
-    args_list.extend([
-        "--dtype=bfloat16",
-        "--max-model-len=32768",
-        "--disable-chunked-mm-input",
-        f"--gpu-memory-utilization={gpu_memory_utilization}",
-        "--kv-cache-dtype=fp8",
-        "--tensor-parallel-size=1",
-        "--max-num-seqs=8",
-        "--enable-chunked-prefill",
-        "--max-num-batched-tokens=4096",
-        "--enable-auto-tool-choice",
-        "--tool-call-parser=gemma4",
-        "--reasoning-parser=gemma4",
-        "--async-scheduling",
-        "--limit-mm-per-prompt={}",
-        "--host=0.0.0.0",
-        "--port=8080"
-    ])
-
+    speculative_arg = ""
     if speculative_model:
-        if is_spec_hf or speculative_model.startswith("/"):
-            spec_path = speculative_model
-        else:
-            spec_path = f"/mnt/models/{speculative_model}"
-        args_list.append(f'--speculative-config={{"model":"{spec_path}","num_speculative_tokens":{num_speculative_tokens}}}')
+        # Format the speculative configuration using the MTP path for Gemma 4 assistant models
+        speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model}","num_speculative_tokens":4}}'
 
-    args_str = "^|^" + "|".join(args_list)
-
-    if not is_hf:
+    if is_hf:
+        command.append("--set-secrets=HF_TOKEN=hf-token:latest")
+        command.append(
+            f"--args=--model={model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+        )
+    else:
         command.append(
             f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"
         )
         command.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
+        # If the speculative model is in GCS, prepend /mnt/models/
+        if speculative_model and not ("/" in speculative_model and not speculative_model.startswith("/mnt/models/")):
+            speculative_model_path = f"/mnt/models/{speculative_model}"
+            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model_path}","num_speculative_tokens":4}}'
+        command.append(
+            f"--args=--model=/mnt/models/{model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+        )
 
-    command.append(f"--args={args_str}")
     command.append("--allow-unauthenticated" if allow_unauthenticated else "--no-allow-unauthenticated")
     command.append(f"--region={LOCATION}")
 
@@ -508,7 +475,6 @@ async def deploy_vllm(
     model_path: str = "gemma-4-12B-it-qat-w4a16-ct",
     bucket_name: str = BUCKET_NAME,
     speculative_model: Optional[str] = None,
-    num_speculative_tokens: int = 4,
 ) -> str:
     """
     Deploys vLLM to Cloud Run with GPU.
@@ -517,23 +483,21 @@ async def deploy_vllm(
         service_name: Name of the service to deploy.
         model_path: Path to the model (GCS folder name or Hugging Face repo ID).
         bucket_name: GCS bucket name (only used if using GCS FUSE).
-        speculative_model: Optional speculative assistant model name/path (e.g. 'google/gemma-4-12B-it-assistant').
-        num_speculative_tokens: Number of speculative tokens to generate per draft step (default: 4).
+        speculative_model: Optional speculative/assistant model identifier (e.g. Hugging Face repo or GCS folder).
     """
     is_hf = "/" in model_path and not model_path.startswith("/")
-    is_spec_hf = False
-    
-    if speculative_model:
-        is_spec_hf = "/" in speculative_model and not speculative_model.startswith("/")
-
-    offline_val = "0" if (is_hf or is_spec_hf) else "1"
-    env_vars = (
-        f"VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,"
-        f"HF_HUB_OFFLINE={offline_val},TRANSFORMERS_OFFLINE={offline_val},"
-        f"VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,"
-        f"PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,"
-        f"MALLOC_TRIM_THRESHOLD_=65536"
+    quant_arg = (
+        ",--quantization=compressed-tensors" if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]) else ""
     )
+
+    speculative_arg = ""
+    if speculative_model:
+        # Check if HF model
+        if "/" in speculative_model and not speculative_model.startswith("/mnt/models/"):
+            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model}","num_speculative_tokens":4}}'
+        else:
+            speculative_model_path = f"/mnt/models/{speculative_model}"
+            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model_path}","num_speculative_tokens":4}}'
 
     cmd = [
         "gcloud",
@@ -559,54 +523,22 @@ async def deploy_vllm(
         "--execution-environment=gen2",
         "--no-allow-unauthenticated",
         f"--region={LOCATION}",
-        f"--set-env-vars={env_vars}",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
-    if is_hf or is_spec_hf:
-        cmd.append(f"--set-secrets=HF_TOKEN={HF_SECRET_ID}:latest")
-
-    # Construct the container args list using alternative delimiter ^|^ with |
-    args_list = [
-        f"--model={model_path}" if is_hf else f"--model=/mnt/models/{model_path}",
-    ]
-    if any(q in model_path.lower() for q in ["qat", "w4a16", "ct"]):
-        args_list.append("--quantization=compressed-tensors")
-
-    args_list.extend([
-        "--dtype=bfloat16",
-        "--max-model-len=32768",
-        "--disable-chunked-mm-input",
-        "--gpu-memory-utilization=0.95",
-        "--kv-cache-dtype=fp8",
-        "--tensor-parallel-size=1",
-        "--max-num-seqs=8",
-        "--enable-chunked-prefill",
-        "--max-num-batched-tokens=4096",
-        "--enable-auto-tool-choice",
-        "--tool-call-parser=gemma4",
-        "--reasoning-parser=gemma4",
-        "--async-scheduling",
-        "--limit-mm-per-prompt={}",
-        "--host=0.0.0.0",
-        "--port=8080"
-    ])
-
-    if speculative_model:
-        if is_spec_hf or speculative_model.startswith("/"):
-            spec_path = speculative_model
-        else:
-            spec_path = f"/mnt/models/{speculative_model}"
-        args_list.append(f'--speculative-config={{"model":"{spec_path}","num_speculative_tokens":{num_speculative_tokens}}}')
-
-    args_str = "^|^" + "|".join(args_list)
-
-    if not is_hf:
+    if is_hf:
+        cmd.append("--set-secrets=HF_TOKEN=hf-token:latest")
+        cmd.append(
+            f"--args=--model={model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+        )
+    else:
         cmd.append(
             f"--add-volume=name=model-volume,type=cloud-storage,bucket={bucket_name},readonly=true,mount-options=uid=1001;gid=1001"
         )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
-
-    cmd.append(f"--args={args_str}")
+        cmd.append(
+            f"--args=--model=/mnt/models/{model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+        )
 
     try:
         result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, check=True)

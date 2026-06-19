@@ -13,8 +13,8 @@ The model was extracted from `gemma-4-12B-it-qat-w4a16-ct.tar.gz` and uploaded t
 ## 🚀 Inference Stack (vLLM)
 The inference server is deployed on Cloud Run with GPU acceleration and GCS FUSE.
 
-*   **Service Name:** `gpu-12b-qat-mtp`
-*   **Service URL:** `https://gpu-12b-qat-mtp-289270257791.us-east4.run.app`
+*   **Service Name:** `gpu-12b-qat-l4-devops-agent`
+*   **Service URL:** `https://gpu-12b-qat-l4-devops-agent-289270257791.us-east4.run.app`
 *   **Region:** `us-east4`
 *   **Hardware:** 
     *   **GPU:** 1x NVIDIA L4
@@ -30,7 +30,7 @@ The inference server is deployed on Cloud Run with GPU acceleration and GCS FUSE
 To connect the MCP Agent to this service, export the following environment variables:
 
 ```bash
-export VLLM_BASE_URL="https://gpu-12b-qat-mtp-289270257791.us-east4.run.app"
+export VLLM_BASE_URL="https://gpu-12b-qat-l4-devops-agent-289270257791.us-east4.run.app"
 export MODEL_NAME="/mnt/models/gemma-4-12B-it-qat-w4a16-ct"
 export GOOGLE_CLOUD_PROJECT="aisprint-491218"
 ```
@@ -42,7 +42,7 @@ make run
 
 ## 📜 Deployment Command (Reference)
 ```bash
-gcloud beta run deploy gpu-12b-qat-mtp \
+gcloud beta run deploy gpu-12b-qat-l4-devops-agent \
   --image=vllm/vllm-openai:nightly \
   --command=python3,-m,vllm.entrypoints.openai.api_server \
   --gpu=1 \
