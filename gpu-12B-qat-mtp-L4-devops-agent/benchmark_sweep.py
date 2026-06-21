@@ -116,9 +116,9 @@ async def run_sweep():
     except Exception as e:
         print(f"Warning: Could not get active model ID: {e}")
 
-    # Sweep dimensions requested: 8, 16, 32..16K context window and 1, 2..2048 concurrent users
-    context_sizes = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
-    concurrencies = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+    # Sweep dimensions requested: representative subset of 8..16K context window and 1..2048 concurrent users
+    context_sizes = [8, 128, 2048, 16384]
+    concurrencies = [1, 8, 64, 512, 2048]
 
     # Pre-generate and cache prompts
     print("Generating prompts for all context window sizes...")

@@ -74,7 +74,7 @@ async def save_hf_token(token: str) -> str:
     return f"✅ Token saved. Version: {response.name}"
 
 
-DEFAULT_SERVICE_NAME = "gpu-12b-qat-l4-devops-agent"
+DEFAULT_SERVICE_NAME = "gpu-12b-qat-mtp"
 
 
 def discover_vllm_url(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]:
@@ -433,7 +433,7 @@ def get_vllm_deployment_config(
         "--memory=16Gi",
         "--cpu=4",
         "--execution-environment=gen2",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0,VLLM_DISABLE_FLASHINFER=0,VLLM_USE_FLASHINFER_SAMPLER=1,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
     quant_arg = (
@@ -443,12 +443,12 @@ def get_vllm_deployment_config(
     speculative_arg = ""
     if speculative_model:
         # Format the speculative configuration using the MTP path for Gemma 4 assistant models
-        speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model}","num_speculative_tokens":4}}'
+        speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model}","num_speculative_tokens":3}}'
 
     if is_hf:
         command.append("--set-secrets=HF_TOKEN=hf-token:latest")
         command.append(
-            f"--args=--model={model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model={model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=8192,--safetensors-load-strategy=prefetch,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
     else:
         command.append(
@@ -458,9 +458,9 @@ def get_vllm_deployment_config(
         # If the speculative model is in GCS, prepend /mnt/models/
         if speculative_model and not ("/" in speculative_model and not speculative_model.startswith("/mnt/models/")):
             speculative_model_path = f"/mnt/models/{speculative_model}"
-            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model_path}","num_speculative_tokens":4}}'
+            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model_path}","num_speculative_tokens":3}}'
         command.append(
-            f"--args=--model=/mnt/models/{model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model=/mnt/models/{model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization={gpu_memory_utilization},--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=8192,--safetensors-load-strategy=prefetch,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
 
     command.append("--allow-unauthenticated" if allow_unauthenticated else "--no-allow-unauthenticated")
@@ -494,10 +494,10 @@ async def deploy_vllm(
     if speculative_model:
         # Check if HF model
         if "/" in speculative_model and not speculative_model.startswith("/mnt/models/"):
-            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model}","num_speculative_tokens":4}}'
+            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model}","num_speculative_tokens":3}}'
         else:
             speculative_model_path = f"/mnt/models/{speculative_model}"
-            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model_path}","num_speculative_tokens":4}}'
+            speculative_arg = f',--speculative-config={{"method":"mtp","model":"{speculative_model_path}","num_speculative_tokens":3}}'
 
     cmd = [
         "gcloud",
@@ -523,13 +523,13 @@ async def deploy_vllm(
         "--execution-environment=gen2",
         "--no-allow-unauthenticated",
         f"--region={LOCATION}",
-        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=1,TRANSFORMERS_OFFLINE=1,VLLM_DISABLE_FLASHINFER=1,VLLM_USE_FLASHINFER_SAMPLER=0,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
+        "--set-env-vars=VLLM_ENABLE_CUDA_COMPATIBILITY=1,VLLM_USE_V1=0,HF_HUB_OFFLINE=0,TRANSFORMERS_OFFLINE=0,VLLM_DISABLE_FLASHINFER=0,VLLM_USE_FLASHINFER_SAMPLER=1,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,MKL_NUM_THREADS=1,OMP_NUM_THREADS=1,MALLOC_TRIM_THRESHOLD_=65536",
     ]
 
     if is_hf:
         cmd.append("--set-secrets=HF_TOKEN=hf-token:latest")
         cmd.append(
-            f"--args=--model={model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model={model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=8192,--safetensors-load-strategy=prefetch,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
     else:
         cmd.append(
@@ -537,7 +537,7 @@ async def deploy_vllm(
         )
         cmd.append("--add-volume-mount=volume=model-volume,mount-path=/mnt/models")
         cmd.append(
-            f"--args=--model=/mnt/models/{model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=4096,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
+            f"--args=--model=/mnt/models/{model_path}{quant_arg}{speculative_arg},--dtype=bfloat16,--max-model-len=32768,--disable-chunked-mm-input,--gpu-memory-utilization=0.95,--kv-cache-dtype=fp8,--tensor-parallel-size=1,--max-num-seqs=8,--enable-chunked-prefill,--max-num-batched-tokens=8192,--safetensors-load-strategy=prefetch,--enable-auto-tool-choice,--tool-call-parser=gemma4,--reasoning-parser=gemma4,--async-scheduling,--limit-mm-per-prompt={{}},--host=0.0.0.0,--port=8080"
         )
 
     try:
