@@ -31,7 +31,7 @@ LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 BUCKET_NAME = f"{PROJECT_ID}-bucket"
 # The URL of the self-hosted vLLM service on Cloud Run
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL")
-MODEL_NAME = os.getenv("MODEL_NAME", "gemma-4-12B-it")
+MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-12B-it-qat-w4a16-ct")
 HF_SECRET_ID = "hf-token"
 
 
@@ -46,7 +46,7 @@ async def get_secret(secret_id: str = HF_SECRET_ID) -> Optional[str]:
         return None
 
 
-DEFAULT_SERVICE_NAME = "gpu-12b-6000-devops-agent"
+DEFAULT_SERVICE_NAME = "gpu-12b-qat-mtp-6000-devops-agent"
 
 
 @mcp.tool()
@@ -490,6 +490,10 @@ def get_vllm_deployment_config(
         "1",
         "--load-format",
         "runai_streamer",
+        "--speculative-model",
+        gcs_model_loc,
+        "--num-speculative-tokens",
+        "2",
         "--port",
         "8080",
         "--host",
@@ -609,6 +613,10 @@ async def deploy_vllm(
         "1",
         "--load-format",
         "runai_streamer",
+        "--speculative-model",
+        gcs_model_loc,
+        "--num-speculative-tokens",
+        "2",
         "--port",
         "8080",
         "--host",
