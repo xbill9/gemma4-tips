@@ -1,7 +1,8 @@
 # Root Makefile for managing all subdirectories
 
 # List of subdirectories containing a Makefile
-SUBDIRS := gpu-26B-6000-devops-agent \
+SUBDIRS := gpu-12B-6000-devops-agent \
+           gpu-26B-6000-devops-agent \
            gpu-31B-6000-devops-agent \
            gpu-4B-6000-devops-agent \
            gpu-4B-L4-devops-agent \
