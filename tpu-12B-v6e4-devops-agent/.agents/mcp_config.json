@@ -1,15 +1,15 @@
 {
   "mcpServers": {
-    "tpu-26B-devops-agent": {
+    "tpu-12B-v6e4-devops-agent": {
       "command": "python3",
       "args": [
-        "/home/xbill/gemma4-tips/tpu-26B-devops-agent/server.py"
+        "/home/xbill/gemma4-tips/tpu-12B-v6e4-devops-agent/server.py"
       ],
       "env": {
         "GOOGLE_CLOUD_PROJECT": "aisprint-491218",
         "GOOGLE_CLOUD_REGION": "southamerica-east1",
         "GOOGLE_CLOUD_ZONE": "southamerica-east1-c",
-        "MODEL_NAME": "google/gemma-4-31B-it",
+        "MODEL_NAME": "google/gemma-4-12B-it",
         "ACCELERATOR_TYPE": "v6e-4",
         "TENSOR_PARALLEL_SIZE": "4"
       }

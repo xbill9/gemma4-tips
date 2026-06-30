@@ -56,7 +56,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
             service_name="test-vllm", model_name="google/gemma-4-12B-it"
         )
         self.assertIn("gcloud alpha compute tpus tpu-vm create test-vllm", config)
-        self.assertIn("--accelerator-type=v6e-1", config)
+        self.assertIn("--accelerator-type=v6e-4", config)
         self.assertIn("--version=v2-alpha-tpuv6e", config)
 
         self.assertIn("vllm/vllm-tpu:nightly", config)

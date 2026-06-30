@@ -27,8 +27,8 @@ ZONE = "europe-west4-a"
 REGION = "europe-west4"
 MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-12B-it")
 HF_SECRET_ID = "hf-token"
-ACCELERATOR_TYPE = os.getenv("ACCELERATOR_TYPE", "v6e-1")
-TENSOR_PARALLEL_SIZE = int(os.getenv("TENSOR_PARALLEL_SIZE", "1"))
+ACCELERATOR_TYPE = os.getenv("ACCELERATOR_TYPE", "v6e-4")
+TENSOR_PARALLEL_SIZE = int(os.getenv("TENSOR_PARALLEL_SIZE", "4"))
 LOCAL_DOCKER_IMAGE = os.getenv("LOCAL_DOCKER_IMAGE", "")
 
 # --- Helper Functions ---

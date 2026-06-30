@@ -3,8 +3,8 @@ PROJECT_ID ?= aisprint-491218
 REGION ?= us-central1
 ZONE ?= $(REGION)-a
 BUCKET_NAME ?= $(PROJECT_ID)-bucket
-SERVICE_NAME ?= tpu-26B-devops-agent
-MODEL_PATH ?= google/gemma-4-31B-it
+SERVICE_NAME ?= tpu-12B-v6e4-devops-agent
+MODEL_PATH ?= google/gemma-4-12B-it
 
 install:
 	pip install -r requirements.txt
@@ -34,7 +34,7 @@ deploy-tpu:
 		--project=$(PROJECT_ID) \
 		--zone=$(ZONE) \
 		--type=v6e \
-		--topology=2x4 \
+		--topology=2x2 \
 		--version=v2-alpha-tpuv6e
 
 # Note: Running the container requires SSHing into the TPU VM.
@@ -47,7 +47,7 @@ run-container:
 	@echo "    vllm/vllm-tpu:gemma4 \\"
 	@echo "    vllm serve $(MODEL_PATH) \\"
 	@echo "    --max-model-len 16384 \\"
-	@echo "    --tensor-parallel-size 8 \\"
+	@echo "    --tensor-parallel-size 4 \\"
 	@echo "    --disable_chunked_mm_input \\"
 	@echo "    --enable-auto-tool-choice \\"
 	@echo "    --tool-call-parser gemma4"

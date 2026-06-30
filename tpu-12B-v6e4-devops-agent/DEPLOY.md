@@ -14,11 +14,11 @@ The inference server is deployed on **Cloud TPU v6e (Trillium)** using the `vllm
 
 *   **Hardware:** 
     *   **TPU Version:** v6e (Trillium)
-    *   **Topology:** `1x1` (1 chip, v6e-1)
+    *   **Topology:** `2x2` (4 chips, v6e-4)
 *   **Software:**
     *   **Image:** `vllm/vllm-tpu:nightly`
     *   **Max Model Length:** `16384`
-    *   **Tensor Parallel Size:** `1`
+    *   **Tensor Parallel Size:** `4`
 
 ## 🛠 Usage
 To connect the MCP Agent to the TPU service, export the following environment variables:
@@ -39,7 +39,7 @@ make run
 ### 1. Create TPU v6e Instance
 ```bash
 gcloud alpha compute tpus tpu-vm create vllm-gemma4-tpu \
-    --type v6e --topology 1x1 \
+    --type v6e --topology 2x2 \
     --project $PROJECT_ID --zone $ZONE --version v2-alpha-tpuv6e
 ```
 
@@ -51,7 +51,7 @@ sudo docker run -t --rm --name vllm-gemma4 --privileged --net=host \
     vllm/vllm-tpu:nightly \
     vllm serve google/gemma-4-12B-it \
     --max-model-len 16384 \
-    --tensor-parallel-size 1 \
+    --tensor-parallel-size 4 \
     --disable_chunked_mm_input \
     --enable-auto-tool-choice \
     --tool-call-parser gemma4
