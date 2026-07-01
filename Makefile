@@ -1,22 +1,14 @@
 # Root Makefile for managing all subdirectories
 
-# List of subdirectories containing a Makefile
-SUBDIRS := gpu-12B-6000-devops-agent \
-           gpu-26B-6000-devops-agent \
-           gpu-31B-6000-devops-agent \
-           gpu-4B-6000-devops-agent \
-           gpu-4B-L4-devops-agent \
-           gpu-6000-devops-agent \
-           gpu-vllm-devops-agent \
-           local-devops-agent \
-           tpu-26B-devops-agent \
-           tpu-31B-devops-agent \
-           tpu-12B-v6e1-devops-agent
+# Dynamically discover all subdirectories containing a Makefile
+SUBDIRS := $(patsubst %/,%,$(dir $(wildcard */Makefile)))
 
-.PHONY: all clean test lint install deploy $(SUBDIRS)
+.PHONY: all clean test lint install deploy help $(SUBDIRS)
 
 # Default target displays help information
-all:
+all: help
+
+help:
 	@echo "========================================================="
 	@echo " Gemma-4 DevOps Agents - Root Makefile"
 	@echo "========================================================="
