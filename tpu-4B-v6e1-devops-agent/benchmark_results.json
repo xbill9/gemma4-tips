@@ -1,0 +1,938 @@
+[
+  {
+    "concurrency": 1,
+    "context": 4,
+    "throughput": 1.13,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 8,
+    "throughput": 1.13,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 16,
+    "throughput": 1.13,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 32,
+    "throughput": 1.12,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 64,
+    "throughput": 1.13,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 128,
+    "throughput": 1.12,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 256,
+    "throughput": 1.12,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 512,
+    "throughput": 1.12,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 1024,
+    "throughput": 1.1,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 2048,
+    "throughput": 1.07,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 4096,
+    "throughput": 1.02,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 8192,
+    "throughput": 0.93,
+    "status": "success"
+  },
+  {
+    "concurrency": 1,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 4,
+    "throughput": 2.24,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 8,
+    "throughput": 2.23,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 16,
+    "throughput": 2.23,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 32,
+    "throughput": 2.21,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 64,
+    "throughput": 2.23,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 128,
+    "throughput": 2.23,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 256,
+    "throughput": 2.23,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 512,
+    "throughput": 2.21,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 1024,
+    "throughput": 2.17,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 2048,
+    "throughput": 2.11,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 4096,
+    "throughput": 2.02,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 8192,
+    "throughput": 1.85,
+    "status": "success"
+  },
+  {
+    "concurrency": 2,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 4,
+    "throughput": 3.69,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 8,
+    "throughput": 3.7,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 16,
+    "throughput": 3.69,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 32,
+    "throughput": 3.7,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 64,
+    "throughput": 3.69,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 128,
+    "throughput": 3.7,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 256,
+    "throughput": 3.66,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 512,
+    "throughput": 3.63,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 1024,
+    "throughput": 3.57,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 2048,
+    "throughput": 3.41,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 4096,
+    "throughput": 3.2,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 8192,
+    "throughput": 2.8,
+    "status": "success"
+  },
+  {
+    "concurrency": 4,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 4,
+    "throughput": 5.3,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 8,
+    "throughput": 5.3,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 16,
+    "throughput": 5.28,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 32,
+    "throughput": 5.28,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 64,
+    "throughput": 5.28,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 128,
+    "throughput": 5.27,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 256,
+    "throughput": 5.26,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 512,
+    "throughput": 5.24,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 1024,
+    "throughput": 5.19,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 2048,
+    "throughput": 4.95,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 4096,
+    "throughput": 4.5,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 8192,
+    "throughput": 3.78,
+    "status": "success"
+  },
+  {
+    "concurrency": 8,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 4,
+    "throughput": 11.28,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 8,
+    "throughput": 12.56,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 16,
+    "throughput": 12.54,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 32,
+    "throughput": 12.53,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 64,
+    "throughput": 12.96,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 128,
+    "throughput": 12.36,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 256,
+    "throughput": 12.85,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 512,
+    "throughput": 12.61,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 1024,
+    "throughput": 11.53,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 2048,
+    "throughput": 10.59,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 4096,
+    "throughput": 8.4,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 8192,
+    "throughput": 5.68,
+    "status": "success"
+  },
+  {
+    "concurrency": 16,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 4,
+    "throughput": 13.35,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 8,
+    "throughput": 13.52,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 16,
+    "throughput": 13.73,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 32,
+    "throughput": 13.65,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 64,
+    "throughput": 13.93,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 128,
+    "throughput": 13.84,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 256,
+    "throughput": 13.25,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 512,
+    "throughput": 13.17,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 1024,
+    "throughput": 12.22,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 2048,
+    "throughput": 10.97,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 4096,
+    "throughput": 8.39,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 8192,
+    "throughput": 5.58,
+    "status": "success"
+  },
+  {
+    "concurrency": 32,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 4,
+    "throughput": 19.49,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 8,
+    "throughput": 20.5,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 16,
+    "throughput": 20.17,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 32,
+    "throughput": 20.07,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 64,
+    "throughput": 20.08,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 128,
+    "throughput": 20.22,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 256,
+    "throughput": 19.5,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 512,
+    "throughput": 18.95,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 1024,
+    "throughput": 17.32,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 2048,
+    "throughput": 14.11,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 4096,
+    "throughput": 9.29,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 8192,
+    "throughput": 3.61,
+    "status": "success"
+  },
+  {
+    "concurrency": 64,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 4,
+    "throughput": 25.83,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 8,
+    "throughput": 26.17,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 16,
+    "throughput": 26.08,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 32,
+    "throughput": 26.05,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 64,
+    "throughput": 26.07,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 128,
+    "throughput": 25.62,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 256,
+    "throughput": 25.07,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 512,
+    "throughput": 23.67,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 1024,
+    "throughput": 20.55,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 2048,
+    "throughput": 14.8,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 4096,
+    "throughput": 7.07,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 8192,
+    "throughput": 3.66,
+    "status": "success"
+  },
+  {
+    "concurrency": 128,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 4,
+    "throughput": 27.79,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 8,
+    "throughput": 27.66,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 16,
+    "throughput": 27.65,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 32,
+    "throughput": 27.47,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 64,
+    "throughput": 27.41,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 128,
+    "throughput": 27.18,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 256,
+    "throughput": 26.37,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 512,
+    "throughput": 24.69,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 1024,
+    "throughput": 19.82,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 2048,
+    "throughput": 12.26,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 4096,
+    "throughput": 7.16,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 8192,
+    "throughput": 3.68,
+    "status": "success"
+  },
+  {
+    "concurrency": 256,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 4,
+    "throughput": 27.83,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 8,
+    "throughput": 27.93,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 16,
+    "throughput": 27.8,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 32,
+    "throughput": 27.54,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 64,
+    "throughput": 27.54,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 128,
+    "throughput": 27.15,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 256,
+    "throughput": 26.44,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 512,
+    "throughput": 24.13,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 1024,
+    "throughput": 17.71,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 2048,
+    "throughput": 12.57,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 4096,
+    "throughput": 7.23,
+    "status": "success"
+  },
+  {
+    "concurrency": 512,
+    "context": 8192,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 512,
+    "context": 16384,
+    "throughput": 0.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 4,
+    "throughput": 27.85,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 8,
+    "throughput": 28.0,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 16,
+    "throughput": 27.89,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 32,
+    "throughput": 27.6,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 64,
+    "throughput": 27.61,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 128,
+    "throughput": 27.27,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 256,
+    "throughput": 25.57,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 512,
+    "throughput": 22.63,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 1024,
+    "throughput": 17.98,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 2048,
+    "throughput": 12.76,
+    "status": "success"
+  },
+  {
+    "concurrency": 1024,
+    "context": 4096,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 1024,
+    "context": 8192,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 1024,
+    "context": 16384,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 2048,
+    "context": 4,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 2048,
+    "context": 8,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 2048,
+    "context": 16,
+    "throughput": 27.75,
+    "status": "success"
+  },
+  {
+    "concurrency": 2048,
+    "context": 32,
+    "throughput": 27.51,
+    "status": "success"
+  },
+  {
+    "concurrency": 2048,
+    "context": 64,
+    "throughput": 27.31,
+    "status": "success"
+  },
+  {
+    "concurrency": 2048,
+    "context": 128,
+    "throughput": 26.52,
+    "status": "success"
+  },
+  {
+    "concurrency": 2048,
+    "context": 256,
+    "throughput": 25.22,
+    "status": "success"
+  },
+  {
+    "concurrency": 2048,
+    "context": 512,
+    "throughput": 22.68,
+    "status": "success"
+  },
+  {
+    "concurrency": 2048,
+    "context": 1024,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 2048,
+    "context": 2048,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 2048,
+    "context": 4096,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 2048,
+    "context": 8192,
+    "throughput": null,
+    "status": "timeout"
+  },
+  {
+    "concurrency": 2048,
+    "context": 16384,
+    "throughput": null,
+    "status": "timeout"
+  }
+]
