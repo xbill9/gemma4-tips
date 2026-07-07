@@ -6,10 +6,43 @@ Welcome to the **Gemma-4 DevOps Agents** workspace. This repository contains nin
 
 ## 📂 Project Structure
 
-This workspace is organized into nine distinct sub-agents, each tailored to a specific environment, model configuration, and serving stack:
+This workspace is organized into 31 distinct sub-agents, each tailored to a specific environment, model configuration, and serving stack:
 
-| Sub-Agent | Purpose | Serving Engine | Target Infrastructure |
-| :--- | :--- | :--- | :--- |
+| Sub-Agent Directory | Purpose / Role | Model Configuration | Serving Engine | Target Infrastructure |
+| :--- | :--- | :--- | :--- | :--- |
+| [g2-4-12B-qat-L4-devops-agent](file:///home/xbill/gemma4-tips/g2-4-12B-qat-L4-devops-agent) | Serverless cloud SRE leveraging the 12B parameter QAT model on L4 GPU via Cloud Run Gen2. | `google/gemma-4-12B-it-qat-w4a16-ct` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-12B-6000-devops-agent](file:///home/xbill/gemma4-tips/gpu-12B-6000-devops-agent) | Serverless cloud SRE running the 12B configuration on an NVIDIA RTX 6000 GPU. | `gemma-4-12B-it` | vLLM | Google Cloud Run (RTX 6000 GPU) |
+| [gpu-12B-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-12B-L4-devops-agent) | Serverless cloud SRE running the 12B configuration on an NVIDIA L4 GPU. | `gemma-4-12B-it` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-12B-qat-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent) | Serverless cloud SRE running the 12B QAT configuration on an NVIDIA L4 GPU. | `google/gemma-4-12B-it-qat-w4a16-ct` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-12B-qat-mtp-6000-devops-agent](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-6000-devops-agent) | Serverless cloud SRE running the 12B QAT configuration with Multi-Token Prediction (MTP) on an RTX 6000 GPU. | `google/gemma-4-12B-it-qat-w4a16-ct` | vLLM | Google Cloud Run (RTX 6000 GPU) |
+| [gpu-12B-qat-mtp-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-L4-devops-agent) | Serverless cloud SRE running the 12B QAT configuration with Multi-Token Prediction (MTP) on an NVIDIA L4 GPU. | `google/gemma-4-12B-it-qat-w4a16-ct` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-26B-6000-devops-agent](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent) | Serverless cloud SRE running the 26B configuration on an NVIDIA RTX 6000 GPU. | `google/gemma-4-26B-it` | vLLM | Google Cloud Run (RTX 6000 GPU) |
+| [gpu-26B-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-26B-L4-devops-agent) | Serverless cloud SRE running the 26B configuration on an NVIDIA L4 GPU. | `nvidia/gemma-4-26B-A4B-NVFP4` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-26B-qat-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-26B-qat-L4-devops-agent) | Serverless cloud SRE leveraging the 26B QAT configuration on an NVIDIA L4 GPU. | `google/gemma-4-26B-A4B-it-qat-w4a16-ct` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-31B-6000-devops-agent](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent) | Serverless cloud SRE running the 31B configuration on an NVIDIA RTX 6000 GPU. | `google/gemma-4-31B-it` | vLLM | Google Cloud Run (RTX 6000 GPU) |
+| [gpu-31B-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-31B-L4-devops-agent) | Serverless cloud SRE running the 31B NVFP4 quantized configuration on an NVIDIA L4 GPU. | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-31B-qat-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent) | Serverless cloud SRE leveraging the 31B QAT configuration on an NVIDIA L4 GPU. | `google/gemma-4-31B-it-qat-w4a16-ct` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-4B-6000-devops-agent](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent) | Serverless cloud SRE running the 4B configuration on an NVIDIA RTX 6000 GPU. | `google/gemma-4-E4B-it` | vLLM | Google Cloud Run (RTX 6000 GPU) |
+| [gpu-4B-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent) | Serverless cloud SRE running the 4B configuration on an NVIDIA L4 GPU. | `google/gemma-4-E4B-it` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-4B-qat-L4-devops-agent](file:///home/xbill/gemma4-tips/gpu-4B-qat-L4-devops-agent) | Serverless cloud SRE leveraging the 4B QAT configuration on an NVIDIA L4 GPU. | `google/gemma-4-E4B-it-qat-w4a16-ct` | vLLM | Google Cloud Run (L4 GPU) |
+| [gpu-6000-devops-agent](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent) | Cloud-based SRE managing GPU-accelerated serverless endpoints (RTX 6000 GPU configuration). | `google/gemma-4-E4B-it` | vLLM | Google Cloud Run (RTX 6000 GPU) |
+| [gpu-vllm-devops-agent](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent) | Cloud-based SRE managing GPU-accelerated serverless endpoints (L4 GPU configuration). | `google/gemma-4-E4B-it` | vLLM | Google Cloud Run (L4 GPU) |
+| [local-2B-devops-agent](file:///home/xbill/gemma4-tips/local-2B-devops-agent) | Local CPU/GPU DevOps/SRE Agent optimized for 2B parameter model execution. | `gemma4:e2b` | Ollama / vLLM | Local Workstation (Docker CPU/GPU) |
+| [local-devops-agent](file:///home/xbill/gemma4-tips/local-devops-agent) | Specialized SRE for local CPU/GPU containerized workloads. | `google/gemma-4-31B-it` | Ollama / vLLM | Local Workstation (Docker CPU/GPU) |
+| [mac-2B-devops-agent](file:///home/xbill/gemma4-tips/mac-2B-devops-agent) | Local macOS/Apple Silicon SRE Agent optimized for 2B parameter model execution on local hardware. | `gemma4:e2b` | Ollama / vLLM | Local macOS (Apple Silicon) |
+| [mac-4B-devops-agent](file:///home/xbill/gemma4-tips/mac-4B-devops-agent) | Local macOS/Apple Silicon SRE Agent optimized for 4B parameter model execution on local hardware. | `gemma4:e4b` | Ollama / vLLM | Local macOS (Apple Silicon) |
+| [tpu-12B-mtp-v6e1-devops-agent](file:///home/xbill/gemma4-tips/tpu-12B-mtp-v6e1-devops-agent) | High-performance TPU SRE/DevOps running the 12B configuration with Multi-Token Prediction (MTP) on a v6e-1 TPU VM. | `google/gemma-4-12B-it` | vLLM | Google Cloud TPUs (v6e Trillium v6e-1) |
+| [tpu-12B-quant-v6e1-devops-agent](file:///home/xbill/gemma4-tips/tpu-12B-quant-v6e1-devops-agent) | High-performance TPU SRE/DevOps running the quantized 12B configuration (FP8) on a v6e-1 TPU VM. | `vrfai/gemma-4-12B-it-fp8` | vLLM | Google Cloud TPUs (v6e Trillium v6e-1) |
+| [tpu-12B-v6e1-devops-agent](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent) | High-performance TPU SRE/DevOps managing TPU workloads with the 12B configuration on a v6e-1 TPU VM. | `google/gemma-4-12B-it` | vLLM | Google Cloud TPUs (v6e Trillium v6e-1) |
+| [tpu-12B-v6e4-devops-agent](file:///home/xbill/gemma4-tips/tpu-12B-v6e4-devops-agent) | High-performance TPU SRE/DevOps managing TPU workloads with the 12B configuration on a v6e-4 TPU VM. | `google/gemma-4-12B-it` | Ollama / vLLM | Google Cloud TPUs (v6e Trillium v6e-4) |
+| [tpu-26B-devops-agent](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent) | High-performance TPU SRE/DevOps running the 26B configuration (running 31B model) on a v6e-1 TPU VM. | `google/gemma-4-31B-it` | vLLM | Google Cloud TPUs (v6e Trillium v6e-1) |
+| [tpu-2B-v6e1-devops-agent](file:///home/xbill/gemma4-tips/tpu-2B-v6e1-devops-agent) | High-performance TPU SRE/DevOps managing TPU workloads with the 2B configuration on a v6e-1 TPU VM. | `google/gemma-4-E2B-it` | Ollama / vLLM | Google Cloud TPUs (v6e Trillium v6e-1) |
+| [tpu-2B-v6e4-devops-agent](file:///home/xbill/gemma4-tips/tpu-2B-v6e4-devops-agent) | High-performance TPU SRE/DevOps managing TPU workloads with the 2B configuration on a v6e-4 TPU VM. | `google/gemma-4-E2B-it` | Ollama / vLLM | Google Cloud TPUs (v6e Trillium v6e-4) |
+| [tpu-31B-devops-agent](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent) | High-performance TPU SRE/DevOps running the 31B configuration on a v6e-1 TPU VM. | `google/gemma-4-31B-it` | vLLM | Google Cloud TPUs (v6e Trillium v6e-1) |
+| [tpu-4B-v6e1-devops-agent](file:///home/xbill/gemma4-tips/tpu-4B-v6e1-devops-agent) | High-performance TPU SRE/DevOps managing TPU workloads with the 4B configuration on a v6e-1 TPU VM. | `google/gemma-4-E4B-it` | Ollama / vLLM | Google Cloud TPUs (v6e Trillium v6e-1) |
+| [tpu-4B-v6e4-devops-agent](file:///home/xbill/gemma4-tips/tpu-4B-v6e4-devops-agent) | High-performance TPU SRE/DevOps managing TPU workloads with the 4B configuration on a v6e-4 TPU VM. | `google/gemma-4-E4B-it` | Ollama / vLLM | Google Cloud TPUs (v6e Trillium v6e-4) |
+
+--- | :--- | :--- | :--- |
 | [Local DevOps Agent](file:///home/xbill/gemma4-tips/local-devops-agent) | CPU/GPU local analysis & prototyping | Ollama / vLLM | Local Docker / Workstations |
 | [GPU DevOps Agent (4B L4)](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent) | Serverless cloud SRE (4B model on L4 GPU) | vLLM | Google Cloud Run (us-east4) |
 | [GPU DevOps Agent (4B 6000)](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent) | Serverless cloud SRE (4B model on RTX 6000 GPU) | vLLM | Google Cloud Run (us-central1) |
@@ -63,61 +96,160 @@ A root [Makefile](file:///home/xbill/gemma4-tips/Makefile) is provided to manage
 
 ## 🚀 Sub-Agent Overviews
 
-### 1. [Local DevOps Agent](file:///home/xbill/gemma4-tips/local-devops-agent)
-- **Role:** Specialized SRE for local containerized workloads.
-- **Inference Stack:** Runs `gemma4:e2b` or `google/gemma-4-E2B-it` via local Docker (`ollama/ollama` or CPU/GPU vLLM).
+### 1. [GPU Agent (12B QAT L4 / Gen2)](file:///home/xbill/gemma4-tips/g2-4-12B-qat-L4-devops-agent)
+- **Role:** Serverless cloud SRE leveraging the 12B parameter QAT model on L4 GPU via Cloud Run Gen2.
+- **Inference Stack:** Runs `google/gemma-4-12B-it-qat-w4a16-ct` via vLLM.
+- **Documentation:** See [g2-4-12B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/g2-4-12B-qat-L4-devops-agent/README.md) and [g2-4-12B-qat-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/g2-4-12B-qat-L4-devops-agent/GEMINI.md).
+
+### 2. [GPU Agent (12B 6000)](file:///home/xbill/gemma4-tips/gpu-12B-6000-devops-agent)
+- **Role:** Serverless cloud SRE running the 12B configuration on an NVIDIA RTX 6000 GPU.
+- **Inference Stack:** Runs `gemma-4-12B-it` via vLLM.
+- **Documentation:** See [gpu-12B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-12B-6000-devops-agent/README.md) and [gpu-12B-6000-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-12B-6000-devops-agent/GEMINI.md).
+
+### 3. [GPU Agent (12B L4)](file:///home/xbill/gemma4-tips/gpu-12B-L4-devops-agent)
+- **Role:** Serverless cloud SRE running the 12B configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `gemma-4-12B-it` via vLLM.
+- **Documentation:** See [gpu-12B-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-12B-L4-devops-agent/README.md) and [gpu-12B-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-12B-L4-devops-agent/GEMINI.md).
+
+### 4. [GPU Agent (12B QAT L4)](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent)
+- **Role:** Serverless cloud SRE running the 12B QAT configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `google/gemma-4-12B-it-qat-w4a16-ct` via vLLM.
+- **Documentation:** See [gpu-12B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/README.md) and [gpu-12B-qat-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-12B-qat-L4-devops-agent/GEMINI.md).
+
+### 5. [GPU Agent (12B QAT MTP 6000)](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-6000-devops-agent)
+- **Role:** Serverless cloud SRE running the 12B QAT configuration with Multi-Token Prediction (MTP) on an RTX 6000 GPU.
+- **Inference Stack:** Runs `google/gemma-4-12B-it-qat-w4a16-ct` via vLLM.
+- **Documentation:** See [gpu-12B-qat-mtp-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-6000-devops-agent/README.md) and [gpu-12B-qat-mtp-6000-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-6000-devops-agent/GEMINI.md).
+
+### 6. [GPU Agent (12B QAT MTP L4)](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-L4-devops-agent)
+- **Role:** Serverless cloud SRE running the 12B QAT configuration with Multi-Token Prediction (MTP) on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `google/gemma-4-12B-it-qat-w4a16-ct` via vLLM.
+- **Documentation:** See [gpu-12B-qat-mtp-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-L4-devops-agent/README.md) and [gpu-12B-qat-mtp-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-12B-qat-mtp-L4-devops-agent/GEMINI.md).
+
+### 7. [GPU Agent (26B 6000)](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent)
+- **Role:** Serverless cloud SRE running the 26B configuration on an NVIDIA RTX 6000 GPU.
+- **Inference Stack:** Runs `google/gemma-4-26B-it` via vLLM.
+- **Documentation:** See [gpu-26B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent/README.md) and [gpu-26B-6000-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent/GEMINI.md).
+
+### 8. [GPU Agent (26B L4)](file:///home/xbill/gemma4-tips/gpu-26B-L4-devops-agent)
+- **Role:** Serverless cloud SRE running the 26B configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `nvidia/gemma-4-26B-A4B-NVFP4` via vLLM.
+- **Documentation:** See [gpu-26B-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-L4-devops-agent/README.md) and [gpu-26B-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-26B-L4-devops-agent/GEMINI.md).
+
+### 9. [GPU Agent (26B QAT L4)](file:///home/xbill/gemma4-tips/gpu-26B-qat-L4-devops-agent)
+- **Role:** Serverless cloud SRE leveraging the 26B QAT configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `google/gemma-4-26B-A4B-it-qat-w4a16-ct` via vLLM.
+- **Documentation:** See [gpu-26B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-qat-L4-devops-agent/README.md) and [gpu-26B-qat-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-26B-qat-L4-devops-agent/GEMINI.md).
+
+### 10. [GPU Agent (31B 6000)](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent)
+- **Role:** Serverless cloud SRE running the 31B configuration on an NVIDIA RTX 6000 GPU.
+- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM.
+- **Documentation:** See [gpu-31B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/README.md) and [gpu-31B-6000-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/GEMINI.md).
+
+### 11. [GPU Agent (31B L4)](file:///home/xbill/gemma4-tips/gpu-31B-L4-devops-agent)
+- **Role:** Serverless cloud SRE running the 31B NVFP4 quantized configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `nvidia/Gemma-4-31B-IT-NVFP4` via vLLM.
+- **Documentation:** See [gpu-31B-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-L4-devops-agent/README.md) and [gpu-31B-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-31B-L4-devops-agent/GEMINI.md).
+
+### 12. [GPU Agent (31B QAT L4)](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent)
+- **Role:** Serverless cloud SRE leveraging the 31B QAT configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `google/gemma-4-31B-it-qat-w4a16-ct` via vLLM.
+- **Documentation:** See [gpu-31B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent/README.md) and [gpu-31B-qat-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent/GEMINI.md).
+
+### 13. [GPU Agent (4B 6000)](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent)
+- **Role:** Serverless cloud SRE running the 4B configuration on an NVIDIA RTX 6000 GPU.
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM.
+- **Documentation:** See [gpu-4B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent/README.md) and [gpu-4B-6000-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent/GEMINI.md).
+
+### 14. [GPU Agent (4B L4)](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent)
+- **Role:** Serverless cloud SRE running the 4B configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM.
+- **Documentation:** See [gpu-4B-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent/README.md) and [gpu-4B-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent/GEMINI.md).
+
+### 15. [GPU Agent (4B QAT L4)](file:///home/xbill/gemma4-tips/gpu-4B-qat-L4-devops-agent)
+- **Role:** Serverless cloud SRE leveraging the 4B QAT configuration on an NVIDIA L4 GPU.
+- **Inference Stack:** Runs `google/gemma-4-E4B-it-qat-w4a16-ct` via vLLM.
+- **Documentation:** See [gpu-4B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-qat-L4-devops-agent/README.md) and [gpu-4B-qat-L4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-4B-qat-L4-devops-agent/GEMINI.md).
+
+### 16. [GPU Agent (6000)](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent)
+- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (RTX 6000 GPU configuration).
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM.
+- **Documentation:** See [gpu-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/README.md) and [gpu-6000-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/GEMINI.md).
+
+### 17. [GPU Agent (vLLM L4)](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent)
+- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (L4 GPU configuration).
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM.
+- **Documentation:** See [gpu-vllm-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/README.md) and [gpu-vllm-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/GEMINI.md).
+
+### 18. [Local Agent (2B)](file:///home/xbill/gemma4-tips/local-2B-devops-agent)
+- **Role:** Local CPU/GPU DevOps/SRE Agent optimized for 2B parameter model execution.
+- **Inference Stack:** Runs `gemma4:e2b` via Ollama / vLLM.
+- **Documentation:** See [local-2B-devops-agent/README.md](file:///home/xbill/gemma4-tips/local-2B-devops-agent/README.md) and [local-2B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/local-2B-devops-agent/GEMINI.md).
+
+### 19. [Local Agent (31B default)](file:///home/xbill/gemma4-tips/local-devops-agent)
+- **Role:** Specialized SRE for local CPU/GPU containerized workloads.
+- **Inference Stack:** Runs `google/gemma-4-31B-it` via Ollama / vLLM.
 - **Documentation:** See [local-devops-agent/README.md](file:///home/xbill/gemma4-tips/local-devops-agent/README.md) and [local-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/local-devops-agent/GEMINI.md).
 
-### 2. [GPU DevOps Agent (4B L4)](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent)
-- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 4B configuration on L4 GPU.
-- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
-- **Documentation:** See [gpu-4B-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-L4-devops-agent/README.md).
+### 20. [macOS Agent (2B)](file:///home/xbill/gemma4-tips/mac-2B-devops-agent)
+- **Role:** Local macOS/Apple Silicon SRE Agent optimized for 2B parameter model execution on local hardware.
+- **Inference Stack:** Runs `gemma4:e2b` via Ollama / vLLM.
+- **Documentation:** See [mac-2B-devops-agent/README.md](file:///home/xbill/gemma4-tips/mac-2B-devops-agent/README.md) and [mac-2B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/mac-2B-devops-agent/GEMINI.md).
 
-### 3. [GPU DevOps Agent (4B 6000)](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent)
-- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 4B configuration on RTX 6000 GPU.
-- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
-- **Documentation:** See [gpu-4B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-4B-6000-devops-agent/README.md).
+### 21. [macOS Agent (4B)](file:///home/xbill/gemma4-tips/mac-4B-devops-agent)
+- **Role:** Local macOS/Apple Silicon SRE Agent optimized for 4B parameter model execution on local hardware.
+- **Inference Stack:** Runs `gemma4:e4b` via Ollama / vLLM.
+- **Documentation:** See [mac-4B-devops-agent/README.md](file:///home/xbill/gemma4-tips/mac-4B-devops-agent/README.md) and [mac-4B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/mac-4B-devops-agent/GEMINI.md).
 
-### 4. [GPU DevOps Agent (26B 6000)](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent)
-- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 26B configuration on RTX 6000 GPU.
-- **Inference Stack:** Runs `google/gemma-4-26B-it` via vLLM on Cloud Run.
-- **Documentation:** See [gpu-26B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-26B-6000-devops-agent/README.md).
+### 22. [TPU Agent (12B MTP v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-mtp-v6e1-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps running the 12B configuration with Multi-Token Prediction (MTP) on a v6e-1 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-12B-it` via vLLM.
+- **Documentation:** See [tpu-12B-mtp-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-12B-mtp-v6e1-devops-agent/README.md) and [tpu-12B-mtp-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-12B-mtp-v6e1-devops-agent/GEMINI.md).
 
-### 5. [GPU DevOps Agent (31B 6000)](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent)
-- **Role:** SRE for serverless GPU-accelerated Cloud Run endpoints running the 31B configuration on RTX 6000 GPU.
-- **Inference Stack:** Runs `google/gemma-4-26B-A4B-it` via vLLM on Cloud Run.
-- **Documentation:** See [gpu-31B-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-6000-devops-agent/README.md).
+### 23. [TPU Agent (12B Quant v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-quant-v6e1-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps running the quantized 12B configuration (FP8) on a v6e-1 TPU VM.
+- **Inference Stack:** Runs `vrfai/gemma-4-12B-it-fp8` via vLLM.
+- **Documentation:** See [tpu-12B-quant-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-12B-quant-v6e1-devops-agent/README.md) and [tpu-12B-quant-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-12B-quant-v6e1-devops-agent/GEMINI.md).
 
-### 6. [GPU DevOps Agent (6000)](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent)
-- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (RTX 6000 GPU configuration).
-- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
-- **Documentation:** See [gpu-6000-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-6000-devops-agent/README.md).
-
-### 7. [GPU DevOps Agent (vLLM)](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent)
-- **Role:** Cloud-based SRE managing GPU-accelerated serverless endpoints (L4 GPU configuration).
-- **Inference Stack:** Runs `google/gemma-4-E4B-it` via vLLM on Cloud Run.
-- **Documentation:** See [gpu-vllm-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-vllm-devops-agent/README.md).
-
-### 8. [TPU DevOps Agent (26B)](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent)
-- **Role:** High-performance TPU SRE/DevOps managing large-scale private clusters (26B configuration).
-- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM on Google Cloud TPUs (v6e Trillium).
-- **Documentation:** See [tpu-26B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent/README.md).
-
-### 9. [TPU DevOps Agent (31B)](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent)
-- **Role:** High-performance TPU SRE/DevOps managing large-scale private clusters (31B configuration).
-- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM on Google Cloud TPUs (v6e Trillium).
-- **Documentation:** See [tpu-31B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/README.md) and [tpu-31B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/GEMINI.md).
-
-### 10. [GPU DevOps Agent (31B QAT L4)](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent)
-- **Role:** Serverless cloud SRE leveraging the 31B QAT configuration on L4 GPU.
-- **Inference Stack:** Runs `google/gemma-4-31B-it-qat-w4a16-ct` via vLLM on Cloud Run.
-- **Documentation:** See [gpu-31B-qat-L4-devops-agent/README.md](file:///home/xbill/gemma4-tips/gpu-31B-qat-L4-devops-agent/README.md).
-
-### 11. [TPU DevOps Agent (12B v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent)
-- **Role:** High-performance TPU SRE/DevOps managing clusters (12B configuration).
-- **Inference Stack:** Runs `google/gemma-4-12B-it` via vLLM on Google Cloud TPUs (v6e Trillium).
+### 24. [TPU Agent (12B v6e-1)](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing TPU workloads with the 12B configuration on a v6e-1 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-12B-it` via vLLM.
 - **Documentation:** See [tpu-12B-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/README.md) and [tpu-12B-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-12B-v6e1-devops-agent/GEMINI.md).
 
+### 25. [TPU Agent (12B v6e-4)](file:///home/xbill/gemma4-tips/tpu-12B-v6e4-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing TPU workloads with the 12B configuration on a v6e-4 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-12B-it` via Ollama / vLLM.
+- **Documentation:** See [tpu-12B-v6e4-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-12B-v6e4-devops-agent/README.md) and [tpu-12B-v6e4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-12B-v6e4-devops-agent/GEMINI.md).
+
+### 26. [TPU Agent (26B v6e-1)](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps running the 26B configuration (running 31B model) on a v6e-1 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM.
+- **Documentation:** See [tpu-26B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent/README.md) and [tpu-26B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-26B-devops-agent/GEMINI.md).
+
+### 27. [TPU Agent (2B v6e-1)](file:///home/xbill/gemma4-tips/tpu-2B-v6e1-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing TPU workloads with the 2B configuration on a v6e-1 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-E2B-it` via Ollama / vLLM.
+- **Documentation:** See [tpu-2B-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-2B-v6e1-devops-agent/README.md) and [tpu-2B-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-2B-v6e1-devops-agent/GEMINI.md).
+
+### 28. [TPU Agent (2B v6e-4)](file:///home/xbill/gemma4-tips/tpu-2B-v6e4-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing TPU workloads with the 2B configuration on a v6e-4 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-E2B-it` via Ollama / vLLM.
+- **Documentation:** See [tpu-2B-v6e4-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-2B-v6e4-devops-agent/README.md) and [tpu-2B-v6e4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-2B-v6e4-devops-agent/GEMINI.md).
+
+### 29. [TPU Agent (31B v6e-1)](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps running the 31B configuration on a v6e-1 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-31B-it` via vLLM.
+- **Documentation:** See [tpu-31B-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/README.md) and [tpu-31B-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-31B-devops-agent/GEMINI.md).
+
+### 30. [TPU Agent (4B v6e-1)](file:///home/xbill/gemma4-tips/tpu-4B-v6e1-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing TPU workloads with the 4B configuration on a v6e-1 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via Ollama / vLLM.
+- **Documentation:** See [tpu-4B-v6e1-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-4B-v6e1-devops-agent/README.md) and [tpu-4B-v6e1-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-4B-v6e1-devops-agent/GEMINI.md).
+
+### 31. [TPU Agent (4B v6e-4)](file:///home/xbill/gemma4-tips/tpu-4B-v6e4-devops-agent)
+- **Role:** High-performance TPU SRE/DevOps managing TPU workloads with the 4B configuration on a v6e-4 TPU VM.
+- **Inference Stack:** Runs `google/gemma-4-E4B-it` via Ollama / vLLM.
+- **Documentation:** See [tpu-4B-v6e4-devops-agent/README.md](file:///home/xbill/gemma4-tips/tpu-4B-v6e4-devops-agent/README.md) and [tpu-4B-v6e4-devops-agent/GEMINI.md](file:///home/xbill/gemma4-tips/tpu-4B-v6e4-devops-agent/GEMINI.md).
 ---
 
 ## 🔒 Security & Credentials
