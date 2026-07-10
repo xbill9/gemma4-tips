@@ -58,7 +58,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
 
         result = await deploy_vllm(
             service_name="test-service",
-            model_path="google/gemma-4-12B-it-qat-w4a16-ct",
+            model_path="google/gemma-4-E2B-it-qat-w4a16-ct",
         )
 
         self.assertIn(
@@ -116,8 +116,8 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         """Test the output of the Vertex AI model copy instructions tool."""
         from server import get_vertex_ai_model_copy_instructions
 
-        instructions = get_vertex_ai_model_copy_instructions("gemma-4-12B-it-qat-w4a16-ct")
-        self.assertIn("gemma-4-12B-it-qat-w4a16-ct", instructions)
+        instructions = get_vertex_ai_model_copy_instructions("gemma-4-E2B-it-qat-w4a16-ct")
+        self.assertIn("gemma-4-E2B-it-qat-w4a16-ct", instructions)
         self.assertIn("Vertex AI Model Garden", instructions)
         self.assertIn("gcloud storage cp", instructions)
 
@@ -132,13 +132,13 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         mock_storage_client.bucket.return_value = mock_bucket
 
         mock_blob = MagicMock()
-        mock_blob.name = "gemma-4-12B-it-qat-w4a16-ct/config.json"
+        mock_blob.name = "gemma-4-E2B-it-qat-w4a16-ct/config.json"
         mock_blob.size = 1024 * 1024 * 5
         mock_bucket.list_blobs.return_value = [mock_blob]
 
         result = list_bucket_models("gs://mock-bucket")
         self.assertIn("mock-bucket", result)
-        self.assertIn("gemma-4-12B-it-qat-w4a16-ct/config.json", result)
+        self.assertIn("gemma-4-E2B-it-qat-w4a16-ct/config.json", result)
         self.assertIn("5.00 MB", result)
 
     @patch("server.secretmanager.SecretManagerServiceClient")
@@ -327,7 +327,7 @@ class TestDevOpsAgent(unittest.IsolatedAsyncioTestCase):
         from server import get_vllm_deployment_config
 
         result = get_vllm_deployment_config(
-            service_name="test-service", model_path="google/gemma-4-12B-it-qat-w4a16-ct"
+            service_name="test-service", model_path="google/gemma-4-E2B-it-qat-w4a16-ct"
         )
         self.assertIn("GCP GCE g2-standard-4 (NVIDIA L4) Instance vLLM Deployment Config", result)
         self.assertIn("gcloud compute instances create", result)

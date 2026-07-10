@@ -45,7 +45,7 @@ BUCKET_NAME = f"{PROJECT_ID}-bucket"
 
 # The URL of the self-hosted vLLM service on Cloud Run or GCP GCE
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL")
-MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-12B-it-qat-w4a16-ct")
+MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-E2B-it-qat-w4a16-ct")
 HF_SECRET_ID = "hf-token"
 
 
@@ -114,7 +114,7 @@ async def save_hf_token(token: str) -> str:
         return "❌ Failed to save token to Secret Manager (GCP failed)."
 
 
-DEFAULT_SERVICE_NAME = "gpu-12b-qat-l4-devops-agent"
+DEFAULT_SERVICE_NAME = "gpu-2b-qat-l4-devops-agent"
 
 
 def discover_vllm_url(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]:
@@ -232,7 +232,7 @@ docker run -d --name vllm-server \\
   -p 8080:8080 \\
   -e HF_TOKEN=$HF_TOKEN \\
   vllm/vllm-openai:nightly \\
-  --model google/gemma-4-12B-it-qat-w4a16-ct \\
+  --model google/gemma-4-E2B-it-qat-w4a16-ct \\
   --quantization compressed-tensors \\
   --dtype bfloat16 \\
   --max-model-len 32768 \\
@@ -259,7 +259,7 @@ def get_vllm_endpoint(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]
     Returns the current active vLLM endpoint URL.
 
     Args:
-        service_name: The service name or instance Name tag to describe (defaults to 'gpu-12b-qat-l4-devops-agent').
+        service_name: The service name or instance Name tag to describe (defaults to 'gpu-2b-qat-l4-devops-agent').
     """
     if service_name == DEFAULT_SERVICE_NAME:
         return get_vllm_url()
@@ -417,7 +417,7 @@ async def query_vllm(prompt: str, max_tokens: int = 512, temperature: float = 0.
 @mcp.tool()
 def get_vllm_deployment_config(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "google/gemma-4-12B-it-qat-w4a16-ct",
+    model_path: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
     zone: str = ZONE,
     gpu_memory_utilization: float = 0.95,
 ) -> str:
@@ -508,7 +508,7 @@ docker run -d --name vllm-server \\
 @mcp.tool()
 async def deploy_vllm(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "google/gemma-4-12B-it-qat-w4a16-ct",
+    model_path: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
     zone: str = ZONE,
 ) -> str:
     """
@@ -619,7 +619,7 @@ docker run -d --name vllm-server \\
 @mcp.tool()
 async def start_gce(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "google/gemma-4-12B-it-qat-w4a16-ct",
+    model_path: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
     zone: str = ZONE,
 ) -> str:
     """
@@ -880,14 +880,14 @@ async def update_vllm_scaling(
 
 @mcp.tool()
 def get_vllm_gpu_deployment_config(
-    cluster_name: str = "gpu-cluster", model_name: str = "google/gemma-4-12B-it-qat-w4a16-ct"
+    cluster_name: str = "gpu-cluster", model_name: str = "google/gemma-4-E2B-it-qat-w4a16-ct"
 ) -> str:
     """
     Generates a GKE manifest and setup instructions for deploying vLLM on GPU (NVIDIA L4).
 
     Args:
         cluster_name: The name of the GKE cluster.
-        model_name: The model identifier (e.g., 'google/gemma-4-12B-it-qat-w4a16-ct').
+        model_name: The model identifier (e.g., 'google/gemma-4-E2B-it-qat-w4a16-ct').
     """
     manifest = f"""
 ### 🌀 vLLM on GPU (GKE Deployment)
@@ -968,7 +968,7 @@ spec:
 
 
 @mcp.tool()
-def get_vertex_ai_model_copy_instructions(model_name: str = "gemma-4-12B-it-qat-w4a16-ct") -> str:
+def get_vertex_ai_model_copy_instructions(model_name: str = "gemma-4-E2B-it-qat-w4a16-ct") -> str:
     """
     Provides instructions and commands to transfer Gemma model artifacts from Vertex AI Model Garden to your GCS bucket.
     """
@@ -994,7 +994,7 @@ Once the artifacts are in your bucket, use `get_vllm_deployment_config` to gener
 
 @mcp.tool()
 async def get_huggingfacehub_download_path(
-    repo_id: str = "google/gemma-4-12B-it-qat-w4a16-ct",
+    repo_id: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
 ) -> str:
     """
     Returns the local cache path for a Hugging Face model using huggingface_hub.
@@ -1013,14 +1013,14 @@ async def get_huggingfacehub_download_path(
 
 @mcp.tool()
 def get_huggingface_model_copy_instructions(
-    repo_id: str = "google/gemma-4-12B-it-qat-w4a16-ct",
+    repo_id: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
     bucket_name: Optional[str] = None,
 ) -> str:
     """
     Provides instructions and commands to transfer Gemma model weights from Hugging Face to your GCS bucket.
 
     Args:
-        repo_id: The Hugging Face repo ID (e.g., 'google/gemma-4-12B-it-qat-w4a16-ct').
+        repo_id: The Hugging Face repo ID (e.g., 'google/gemma-4-E2B-it-qat-w4a16-ct').
         bucket_name: The target bucket name (defaults to BUCKET_NAME).
     """
     if not bucket_name:
@@ -1183,10 +1183,12 @@ async def query_gemma4_with_stats(prompt: str) -> str:
             if ttft is None:
                 ttft = time.monotonic() - start_time
 
-            if chunk.choices and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                response_content += content
-                total_tokens += 1  # Rough token count
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta:
+                content = delta.content or getattr(delta, "reasoning", None)
+                if content:
+                    response_content += content
+                    total_tokens += 1  # Rough token count
 
         end_time = time.monotonic()
         total_time = end_time - start_time
