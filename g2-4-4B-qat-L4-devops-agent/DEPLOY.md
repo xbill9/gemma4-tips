@@ -1,4 +1,4 @@
-# Deployment Guide: Self-Hosted vLLM on AWS EC2 (Gemma 4 E2B-it QAT)
+# Deployment Guide: Self-Hosted vLLM on AWS EC2 (Gemma 4 E4B-it QAT)
 
 This document summarizes the deployment state, configuration, and architecture for the self-hosted vLLM inference server running on AWS EC2.
 
@@ -6,8 +6,8 @@ This document summarizes the deployment state, configuration, and architecture f
 
 ## 📦 Model Artifacts
 The model is served using the official quantized w4a16 compressed-tensors (QAT) checkpoint:
-*   **Source:** Hugging Face (`google/gemma-4-E2B-it-qat-w4a16-ct`)
-*   **Alternative Storage:** AWS S3 (`s3://vllm-models-bucket/gemma-4-E2B-it-qat-w4a16-ct/`)
+*   **Source:** Hugging Face (`google/gemma-4-E4B-it-qat-w4a16-ct`)
+*   **Alternative Storage:** AWS S3 (`s3://vllm-models-bucket/gemma-4-E4B-it-qat-w4a16-ct/`)
 *   **Format:** Hugging Face Transformers (Safetensors with compressed-tensors)
 
 ---
@@ -29,7 +29,7 @@ aws ec2 run-instances \
   --image-id ami-012ba162b9cd2729c \
   --instance-type g6.2xlarge \
   --key-name alinux \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=gpu-2b-qat-l4-devops-agent}]' \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=gpu-4b-qat-l4-devops-agent}]' \
   --instance-market-options '{"MarketType":"spot","SpotOptions":{"SpotInstanceType":"one-time"}}' \
   --user-data file://user_data.sh
 ```
@@ -49,7 +49,7 @@ docker run -d --name vllm-server \
   -p 8080:8080 \
   -e HF_TOKEN="<your-hf-token>" \
   vllm/vllm-openai:nightly \
-  --model google/gemma-4-E2B-it-qat-w4a16-ct \
+  --model google/gemma-4-E4B-it-qat-w4a16-ct \
   --quantization compressed-tensors \
   --dtype bfloat16 \
   --max-model-len 32768 \
@@ -85,7 +85,7 @@ To connect the MCP SRE Agent to the newly deployed AWS endpoint:
 2. Export the endpoint URL in your terminal environment:
    ```bash
    export VLLM_BASE_URL="http://54.1.2.3:8080"
-   export MODEL_NAME="google/gemma-4-E2B-it-qat-w4a16-ct"
+   export MODEL_NAME="google/gemma-4-E4B-it-qat-w4a16-ct"
    ```
 3. Start the agent:
    ```bash

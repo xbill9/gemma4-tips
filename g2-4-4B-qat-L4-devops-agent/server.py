@@ -39,13 +39,13 @@ if os.path.exists(aws_creds_path):
 
 # Configuration
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "aisprint-491218")
-LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-east4")
-ZONE = os.getenv("GOOGLE_CLOUD_ZONE", "us-east4-a")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+ZONE = "us-central1-a"
 BUCKET_NAME = f"{PROJECT_ID}-bucket"
 
 # The URL of the self-hosted vLLM service on Cloud Run or GCP GCE
-VLLM_BASE_URL = os.getenv("VLLM_BASE_URL")
-MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-E2B-it-qat-w4a16-ct")
+VLLM_BASE_URL = "http://34.31.68.246:8080"
+MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-E4B-it-qat-w4a16-ct")
 HF_SECRET_ID = "hf-token"
 
 
@@ -114,7 +114,7 @@ async def save_hf_token(token: str) -> str:
         return "❌ Failed to save token to Secret Manager (GCP failed)."
 
 
-DEFAULT_SERVICE_NAME = "gpu-2b-qat-l4-devops-agent"
+DEFAULT_SERVICE_NAME = "gpu-4b-qat-l4-devops-agent"
 
 
 def discover_vllm_url(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]:
@@ -232,7 +232,7 @@ docker run -d --name vllm-server \\
   -p 8080:8080 \\
   -e HF_TOKEN=$HF_TOKEN \\
   vllm/vllm-openai:nightly \\
-  --model google/gemma-4-E2B-it-qat-w4a16-ct \\
+  --model google/gemma-4-E4B-it-qat-w4a16-ct \\
   --quantization compressed-tensors \\
   --dtype bfloat16 \\
   --max-model-len 32768 \\
@@ -259,7 +259,7 @@ def get_vllm_endpoint(service_name: str = DEFAULT_SERVICE_NAME) -> Optional[str]
     Returns the current active vLLM endpoint URL.
 
     Args:
-        service_name: The service name or instance Name tag to describe (defaults to 'gpu-2b-qat-l4-devops-agent').
+        service_name: The service name or instance Name tag to describe (defaults to 'gpu-4b-qat-l4-devops-agent').
     """
     if service_name == DEFAULT_SERVICE_NAME:
         return get_vllm_url()
@@ -417,7 +417,7 @@ async def query_vllm(prompt: str, max_tokens: int = 512, temperature: float = 0.
 @mcp.tool()
 def get_vllm_deployment_config(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
+    model_path: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
     zone: str = ZONE,
     gpu_memory_utilization: float = 0.95,
 ) -> str:
@@ -474,6 +474,8 @@ docker run -d --name vllm-server \\
         f"  --zone={zone} \\\n"
         f"  --machine-type=g2-standard-4 \\\n"
         f"  --accelerator=type=nvidia-l4,count=1 \\\n"
+        f"  --provisioning-model=SPOT \\\n"
+        f"  --instance-termination-action=STOP \\\n"
         f"  --maintenance-policy=TERMINATE \\\n"
         f"  --image-family=common-cu121-debian-11-py310 \\\n"
         f"  --image-project=deeplearning-platform-release \\\n"
@@ -508,7 +510,7 @@ docker run -d --name vllm-server \\
 @mcp.tool()
 async def deploy_vllm(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
+    model_path: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
     zone: str = ZONE,
 ) -> str:
     """
@@ -576,6 +578,8 @@ docker run -d --name vllm-server \\
                 f"--zone={zone}",
                 "--machine-type=g2-standard-4",
                 "--accelerator=type=nvidia-l4,count=1",
+                "--provisioning-model=SPOT",
+                "--instance-termination-action=STOP",
                 "--maintenance-policy=TERMINATE",
                 "--image-family=common-cu129-ubuntu-2204-nvidia-580",
                 "--image-project=deeplearning-platform-release",
@@ -619,7 +623,7 @@ docker run -d --name vllm-server \\
 @mcp.tool()
 async def start_gce(
     service_name: str = DEFAULT_SERVICE_NAME,
-    model_path: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
+    model_path: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
     zone: str = ZONE,
 ) -> str:
     """
@@ -880,14 +884,14 @@ async def update_vllm_scaling(
 
 @mcp.tool()
 def get_vllm_gpu_deployment_config(
-    cluster_name: str = "gpu-cluster", model_name: str = "google/gemma-4-E2B-it-qat-w4a16-ct"
+    cluster_name: str = "gpu-cluster", model_name: str = "google/gemma-4-E4B-it-qat-w4a16-ct"
 ) -> str:
     """
     Generates a GKE manifest and setup instructions for deploying vLLM on GPU (NVIDIA L4).
 
     Args:
         cluster_name: The name of the GKE cluster.
-        model_name: The model identifier (e.g., 'google/gemma-4-E2B-it-qat-w4a16-ct').
+        model_name: The model identifier (e.g., 'google/gemma-4-E4B-it-qat-w4a16-ct').
     """
     manifest = f"""
 ### 🌀 vLLM on GPU (GKE Deployment)
@@ -968,7 +972,7 @@ spec:
 
 
 @mcp.tool()
-def get_vertex_ai_model_copy_instructions(model_name: str = "gemma-4-E2B-it-qat-w4a16-ct") -> str:
+def get_vertex_ai_model_copy_instructions(model_name: str = "gemma-4-E4B-it-qat-w4a16-ct") -> str:
     """
     Provides instructions and commands to transfer Gemma model artifacts from Vertex AI Model Garden to your GCS bucket.
     """
@@ -994,7 +998,7 @@ Once the artifacts are in your bucket, use `get_vllm_deployment_config` to gener
 
 @mcp.tool()
 async def get_huggingfacehub_download_path(
-    repo_id: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
+    repo_id: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
 ) -> str:
     """
     Returns the local cache path for a Hugging Face model using huggingface_hub.
@@ -1013,14 +1017,14 @@ async def get_huggingfacehub_download_path(
 
 @mcp.tool()
 def get_huggingface_model_copy_instructions(
-    repo_id: str = "google/gemma-4-E2B-it-qat-w4a16-ct",
+    repo_id: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
     bucket_name: Optional[str] = None,
 ) -> str:
     """
     Provides instructions and commands to transfer Gemma model weights from Hugging Face to your GCS bucket.
 
     Args:
-        repo_id: The Hugging Face repo ID (e.g., 'google/gemma-4-E2B-it-qat-w4a16-ct').
+        repo_id: The Hugging Face repo ID (e.g., 'google/gemma-4-E4B-it-qat-w4a16-ct').
         bucket_name: The target bucket name (defaults to BUCKET_NAME).
     """
     if not bucket_name:
@@ -1102,6 +1106,189 @@ def check_gpu_quotas(region: Optional[str] = None) -> str:
         return f"Failed to retrieve GPU quotas for region `{region}`:\nError: {e.stderr}\nOutput: {e.stdout}"
     except Exception as e:
         return f"Error checking GPU quotas: {str(e)}"
+
+
+@mcp.tool()
+async def find_quota(resource_type: str = "NVIDIA_L4") -> str:
+    """
+    Scans multiple GCP regions to find available quota for a specific resource.
+    Uses REGION_LIST.md for the scan targets and writes available regions to AVAILABLE_REGIONS.md.
+    """
+    regions = []
+    region_list_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "REGION_LIST.md")
+    
+    is_gpu = "GPU" in resource_type.upper() or "L4" in resource_type.upper()
+    is_tpu = "TPU" in resource_type.upper()
+    
+    if os.path.exists(region_list_path):
+        with open(region_list_path, "r") as f:
+            current_section = None
+            for line in f:
+                line = line.strip()
+                if line.startswith("## "):
+                    current_section = line.upper()
+                elif line.startswith("- ") and current_section:
+                    region = line.strip("- ").strip()
+                    if is_gpu and "GPU" in current_section:
+                        regions.append(region)
+                    elif is_tpu and "TPU" in current_section:
+                        regions.append(region)
+    
+    # Fallback to default if no regions found for the specific category
+    if not regions:
+        if os.path.exists(region_list_path):
+             # If the file exists but no specific category matched, fallback to all bullets as before
+             with open(region_list_path, "r") as f:
+                for line in f:
+                    if line.strip().startswith("- "):
+                        regions.append(line.strip("- ").strip())
+        else:
+            regions = [LOCATION]
+
+    results = []
+    available_regions = set()
+    for region in regions:
+        cmd = ["compute", "regions", "describe", region, f"--project={PROJECT_ID}", "--format=json(quotas)"]
+        code, stdout, stderr = await run_gcloud(cmd)
+        if code == 0:
+            data = json.loads(stdout)
+            quotas = data.get("quotas", [])
+            found_in_region = False
+            for q in quotas:
+                metric = q.get("metric", "")
+                if resource_type.upper() in metric.upper() or ("GPU" in metric.upper() and resource_type.upper() == "NVIDIA_L4"):
+                    limit = float(q.get("limit", 0))
+                    usage = float(q.get("usage", 0))
+                    available = limit - usage
+                    if available > 0:
+                        results.append(f"- **{region}**: {int(available)} units available ({metric})")
+                        available_regions.add(region)
+                        found_in_region = True
+            if not found_in_region:
+                logger.debug(f"No available {resource_type} quota in {region}.")
+    
+    # Write available regions to a flat md file
+    available_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "AVAILABLE_REGIONS.md")
+    with open(available_path, "w") as f:
+        f.write("# Available Regions with Quota\n\n")
+        for r in sorted(list(available_regions)):
+            f.write(f"- {r}\n")
+
+    if not results:
+        return f"❌ No available quota found for `{resource_type}` across scanned regions: {', '.join(regions)}"
+    
+    return f"### ✅ Available Quota for `{resource_type}`\n\n" + "\n".join(results) + f"\n\nResults saved to `AVAILABLE_REGIONS.md`"
+
+
+@mcp.tool()
+async def find_gpu(gpu_type: str = "NVIDIA_L4") -> str:
+    """
+    Alias for find_quota. Scans regions for specific GPU availability.
+    """
+    return await find_quota(resource_type=gpu_type)
+
+
+@mcp.tool()
+async def deploy_with_search(
+    service_name: str = DEFAULT_SERVICE_NAME,
+    model_path: str = "google/gemma-4-E4B-it-qat-w4a16-ct",
+) -> str:
+    """
+    Reads AVAILABLE_REGIONS.md and attempts to deploy vLLM in each zone of those regions
+    until a successful deployment is achieved.
+    """
+    available_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "AVAILABLE_REGIONS.md")
+    if not os.path.exists(available_path):
+        return "❌ `AVAILABLE_REGIONS.md` not found. Please run `find_quota` first."
+
+    regions = []
+    with open(available_path, "r") as f:
+        for line in f:
+            if line.strip().startswith("- "):
+                regions.append(line.strip("- ").strip())
+
+    if not regions:
+        return "❌ No available regions found in `AVAILABLE_REGIONS.md`."
+
+    for region in regions:
+        # Get zones for the region
+        cmd = ["compute", "zones", "list", f"--filter=region:({region})", "--format=value(name)", f"--project={PROJECT_ID}"]
+        code, stdout, stderr = await run_gcloud(cmd)
+        if code != 0:
+            logger.warning(f"Failed to list zones for region {region}: {stderr}")
+            continue
+
+        zones = stdout.splitlines()
+        for zone in zones:
+            logger.info(f"🚀 Attempting deployment in zone: {zone}...")
+            result = await deploy_vllm(service_name=service_name, model_path=model_path, zone=zone)
+            if "Successfully requested" in result:
+                return f"✅ Deployment SUCCESSFUL in zone `{zone}`!\n\n{result}"
+            else:
+                logger.warning(f"⚠️ Deployment failed in {zone}: {result}")
+                if "ZONE_RESOURCE_POOL_EXHAUSTED" not in result and "STOCKOUT" not in result:
+                    # If it's not a resource pool issue, maybe it's something else we should report
+                    logger.error(f"Critical error in {zone}: {result}")
+
+    return "❌ Failed to deploy in all available regions and zones due to resource exhaustion or other errors."
+
+
+@mcp.tool()
+async def find_tpu(accelerator_type: str = "v6e-4") -> str:
+    """
+    Searches across all zones to find available TPU resources of the specified type.
+    """
+    # 1. Load targeted TPU regions from REGION_LIST.md
+    tpu_regions = []
+    region_list_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "REGION_LIST.md")
+    if os.path.exists(region_list_path):
+        with open(region_list_path, "r") as f:
+            current_section = None
+            for line in f:
+                line = line.strip()
+                if "TPU" in line.upper() and line.startswith("##"):
+                    current_section = "TPU"
+                elif line.startswith("- ") and current_section == "TPU":
+                    tpu_regions.append(line.strip("- ").strip())
+
+    # 2. Run global search
+    cmd = ["compute", "tpus", "tpu-vm", "accelerator-types", "list", f"--project={PROJECT_ID}", "--format=json"]
+    code, stdout, stderr = await run_gcloud(cmd)
+    
+    if code != 0:
+        return f"Error listing TPU accelerator types: {stderr}"
+    
+    try:
+        data = json.loads(stdout)
+        results = []
+        for item in data:
+            name = item.get("name", "")
+            # Extract zone from name path: projects/PROJECT/locations/ZONE/acceleratorTypes/TYPE
+            # or from the 'location' field if present
+            zone = item.get("location", "")
+            if not zone and "locations/" in name:
+                zone = name.split("locations/")[-1].split("/")[0]
+            
+            if not zone:
+                zone = item.get("zone", "").split("/")[-1]
+
+            # Filter by targeted regions if the list is available
+            if tpu_regions:
+                region = "-".join(zone.split("-")[:-1])
+                if region not in tpu_regions:
+                    continue
+
+            if accelerator_type.lower() in name.lower():
+                results.append(f"- **{zone}**: `{name.split('/')[-1]}`")
+        
+        if not results:
+            target_msg = f" in regions: {', '.join(tpu_regions)}" if tpu_regions else ""
+            return f"❌ No TPU accelerator type `{accelerator_type}` found{target_msg}."
+        
+        header = f"### 🚀 Targeted TPU Zones for `{accelerator_type}`\n\n" if tpu_regions else f"### 🚀 Available TPU Zones for `{accelerator_type}`\n\n"
+        return header + "\n".join(results)
+    except Exception as e:
+        return f"Failed to parse TPU data: {str(e)}"
 
 
 @mcp.tool()
@@ -1257,12 +1444,13 @@ async def get_model_details() -> str:
 
 
 @mcp.tool()
-async def get_system_status(service_name: str = DEFAULT_SERVICE_NAME) -> str:
+async def get_system_status(service_name: str = DEFAULT_SERVICE_NAME, zone: str = ZONE) -> str:
     """
     Provides a high-level dashboard of GCP GCE VM system status and vLLM health.
 
     Args:
         service_name: The name of the GCE VM instance.
+        zone: The GCP zone of the instance.
     """
     health = "🔴 Offline"
     url = None
@@ -1290,7 +1478,7 @@ async def get_system_status(service_name: str = DEFAULT_SERVICE_NAME) -> str:
                 "describe",
                 service_name,
                 f"--project={PROJECT_ID}",
-                f"--zone={ZONE}",
+                f"--zone={zone}",
                 "--format=value(status)",
             ]
         )
@@ -1575,6 +1763,10 @@ async def get_help() -> str:
         "- **`get_vllm_deployment_config`**: Generates the gcloud compute command and startup script.\n"
         "- **`get_vllm_gpu_deployment_config`**: Generates a GKE manifest for GPU (NVIDIA L4).\n"
         "- **`check_gpu_quotas`**: Checks GPU/Accelerator quotas for a region.\n"
+        "- **`find_quota`**: Scans multiple GCP regions for resource quota (backed by REGION_LIST.md) and updates AVAILABLE_REGIONS.md.\n"
+        "- **`find_gpu`**: Alias for `find_quota`, specifically for finding GPU availability.\n"
+        "- **`find_tpu`**: Searches across all zones for available TPU resources.\n"
+        "- **`deploy_with_search`**: Iterates through AVAILABLE_REGIONS.md to find a zone with resources and deploy.\n"
         "- **`get_vllm_endpoint`**: Returns the current active vLLM endpoint URL.\n\n"
         "#### 📊 Model Management\n"
         "- **`list_vertex_models`**: Lists models in the Vertex AI Registry.\n"

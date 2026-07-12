@@ -3,8 +3,8 @@ PROJECT_ID ?= aisprint-491218
 REGION ?= us-east4
 ZONE ?= $(REGION)-a
 BUCKET_NAME ?= $(PROJECT_ID)-bucket
-SERVICE_NAME ?= gpu-2b-qat-l4-devops-agent
-MODEL_PATH ?= gemma-4-E2B-it-qat-w4a16-ct
+SERVICE_NAME ?= gpu-4b-qat-l4-devops-agent
+MODEL_PATH ?= gemma-4-E4B-it-qat-w4a16-ct
 
 install:
 	pip install -r requirements.txt
@@ -63,6 +63,8 @@ deploy-vllm:
 		--zone=$(ZONE) \
 		--machine-type=g2-standard-4 \
 		--accelerator=type=nvidia-l4,count=1 \
+		--provisioning-model=SPOT \
+		--instance-termination-action=STOP \
 		--maintenance-policy=TERMINATE \
 		--image-family=common-cu129-ubuntu-2204-nvidia-580 \
 		--image-project=deeplearning-platform-release \

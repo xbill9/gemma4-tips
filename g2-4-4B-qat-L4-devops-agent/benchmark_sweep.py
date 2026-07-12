@@ -31,7 +31,7 @@ except Exception as e:
 
 
 # Helper to get service URL
-def discover_vllm_url(service_name="gpu-2b-qat-l4-devops-agent"):
+def discover_vllm_url(service_name="gpu-4b-qat-l4-devops-agent"):
     if os.getenv("VLLM_BASE_URL"):
         return os.getenv("VLLM_BASE_URL")
 
@@ -94,7 +94,7 @@ def get_auth_token():
         return ""
 
 
-async def tokenize_prompt(url, token, prompt_text, model_name="google/gemma-4-E2B-it-qat-w4a16-ct"):
+async def tokenize_prompt(url, token, prompt_text, model_name="google/gemma-4-E4B-it-qat-w4a16-ct"):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -113,7 +113,7 @@ async def tokenize_prompt(url, token, prompt_text, model_name="google/gemma-4-E2
     return len(prompt_text.split())
 
 
-async def get_prompt_for_size(url, token, size, model_name="google/gemma-4-E2B-it-qat-w4a16-ct"):
+async def get_prompt_for_size(url, token, size, model_name="google/gemma-4-E4B-it-qat-w4a16-ct"):
     word = " hello"
     guess_text = word * size
     count = await tokenize_prompt(url, token, guess_text, model_name)
@@ -139,7 +139,7 @@ async def run_sweep():
     print(f"Found vLLM Endpoint: {url}")
     token = get_auth_token()
 
-    model_name = "google/gemma-4-E2B-it-qat-w4a16-ct"
+    model_name = "google/gemma-4-E4B-it-qat-w4a16-ct"
     try:
         headers = {}
         if token:
