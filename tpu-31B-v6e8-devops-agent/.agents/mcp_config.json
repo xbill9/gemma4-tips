@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "tpu-31B-v6e8-devops-agent": {
+      "command": "python3",
+      "args": [
+        "/home/xbill/gemma4-tips/tpu-31B-v6e8-devops-agent/server.py"
+      ],
+      "env": {
+        "GOOGLE_CLOUD_PROJECT": "aisprint-491218",
+        "GOOGLE_CLOUD_REGION": "southamerica-west1",
+        "GOOGLE_CLOUD_ZONE": "southamerica-west1-a",
+        "MODEL_NAME": "google/gemma-4-31B-it",
+        "ACCELERATOR_TYPE": "v6e-8",
+        "TENSOR_PARALLEL_SIZE": "8"
+      }
+    }
+  }
+}
