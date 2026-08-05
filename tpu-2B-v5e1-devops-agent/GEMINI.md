@@ -18,6 +18,9 @@ vLLM recipes
 vLLM github
 * https://github.com/vllm-project/vllm/releases
 
+chip comparison (third-party, directional only — different model and harness than this rig's sweep)
+* https://deploybase.ai/articles/v5e-1-tpu-vs-t4-gpu
+
 never destroy the queued resource without explicit asking for it
 
 ## 🚀 Deployment Requirements

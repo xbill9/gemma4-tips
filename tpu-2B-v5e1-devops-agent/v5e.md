@@ -395,3 +395,9 @@ A single TPU v5e chip serves Gemma 4 2B at **90–127 tok/s single-stream** and 
 Against v6e-1 at 2.25× the price, v5e gives up roughly **1.8× decode speed** and **4× KV cache pool**. The decode gap is a bandwidth story and v5e wins on a per-dollar basis. The KV gap is real and unfixable, and it is the actual reason to reach for v6e: not because v6e is faster, but because 16 GB runs out.
 
 The three things that cost the most time were all configuration, not capacity: flex-start `v5litepod-1` is only accepted in `us-west4-a`; a nonexistent VPC in the create flags looked exactly like a global capacity shortage; and `ct6e-standard-1t` in a note labelled "v5e" quietly doubled every memory number downstream. Quota is not availability, availability is not the provisioning model, and a resource that fails in every zone is never the zones' fault.
+
+#### Further reading
+
+- [Debugging deployments with Gemma 4 4B, TPU v6e-1, MCP and Antigravity CLI](https://xbill999.medium.com/debugging-deployments-with-gemma-4b-tpu-v6e-1-mcp-and-antigravity-cli-c9846231237a) — the v6e-1 predecessor to this article, and the source of the v6e numbers used above.
+- [TPU v5e vs T4 GPU: Best Budget AI Accelerator for 2026](https://deploybase.ai/articles/v5e-1-tpu-vs-t4-gpu) — the other budget comparison, against NVIDIA's T4 rather than against a bigger TPU. Its throughput and $/M-token figures come from a different model and harness than anything measured here, so treat them as directional, not as a like-for-like extension of the tables above.
+- [Cloud TPU v5e documentation](https://docs.cloud.google.com/tpu/docs/v5e) and [Dynamic Workload Scheduler pricing](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dws) — the sources for the spec table and the flex-start discount.
