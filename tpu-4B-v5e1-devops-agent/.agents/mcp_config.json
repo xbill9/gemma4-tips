@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "tpu-4B-v5e1-devops-agent": {
+      "command": "/home/xbill/gemma4-tips/tpu-4B-v5e1-devops-agent/mcp-run.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}
