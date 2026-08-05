@@ -12,6 +12,7 @@ Usage:  python parse_sweep.py <raw_output_file> <output_csv>
 import csv
 import re
 import sys
+from typing import Any
 
 # Benchmark label -> CSV column. Only these are pulled out of each block.
 METRICS = {
@@ -36,8 +37,8 @@ POINT_RE = re.compile(r"===POINT concurrency=(\d+) input_len=(\d+) num_prompts=(
 
 
 def parse(raw: str) -> list[dict]:
-    rows = []
-    current = None
+    rows: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
     for line in raw.splitlines():
         match = POINT_RE.search(line)
         if match:
