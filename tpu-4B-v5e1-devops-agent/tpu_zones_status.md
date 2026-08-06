@@ -31,7 +31,7 @@ means creation is permitted, and Flex-start capacity still has to be granted.
 | **europe-west3-b** | Yes | Not attempted | — |
 | **europe-west3-c** | Yes | Not attempted | — |
 | **europe-west4-a** | Yes | No | FLEX_START not supported for v5litepod-1 in this location (API rejected at create). Quota is fine; the provisioning model is the blocker. |
-| **europe-west4-b** | Yes | No | FLEX_START not supported for v5litepod-1 in this location (API rejected at create). |
+| **europe-west4-b** | Yes | Not attempted | Re-enabled 2026-08-05 for retry. Previously (2026-08-04) rejected at create: FLEX_START not supported for v5litepod-1 in this location. If it rejects again, set this back to `No`. |
 | **europe-west4-c** | Yes | Not attempted | — |
 | **northamerica-northeast1-a** | Yes | Not attempted | — |
 | **northamerica-northeast1-b** | Yes | Not attempted | — |
